@@ -1,0 +1,28 @@
+{
+  "projects": [
+    {
+      "id": "8fb201ce-a284-4203-a29f-b23a181fe828",
+      "name": "Hello Teacher",
+      "icon_path": "A:/Hello Teacher/teacher_logo.png",
+      "main_project_folder": "A:/Hello Teacher",
+      "sub_projects": [
+        {
+          "id": "48d1e596-0bd4-424e-a83b-b5f7686bd1e0",
+          "directory": "A:/Hello Teacher/Source Code/Halo_Teacher_Client_Firebase",
+          "type": "flutter"
+        },
+        {
+          "id": "18bec36c-c923-43cf-8584-1d1d32d97491",
+          "directory": "A:/Hello Teacher/Source Code/Halo_Teacher_Admin_Dashboard_Firebase",
+          "type": "admin_dashboard"
+        },
+        {
+          "id": "f07e7fb3-b33d-4a00-ad50-105bcd49890c",
+          "directory": "A:/Hello Teacher/Source Code/package.txt",
+          "type": "data_txt"
+        }
+      ],
+      "open_count": 1
+    }
+  ]
+}
