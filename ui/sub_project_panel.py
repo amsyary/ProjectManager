@@ -2,7 +2,6 @@
 
 import tkinter as tk
 from tkinter import ttk, messagebox
-from pathlib import Path
 from typing import Callable
 
 from models.project import Project, SubProject, ProjectType
@@ -185,19 +184,9 @@ class SubProjectPanel(ttk.Frame):
                 side="left", padx=(0, 8)
             )
 
-        full_path = sp.directory
-        if sp.type == ProjectType.LINK:
-            display_text = (
-                full_path[: MAX_DIR_DISPLAY - 3] + "..."
-                if len(full_path) > MAX_DIR_DISPLAY
-                else full_path
-            )
-        else:
-            dir_name = Path(full_path).name
-            if len(dir_name) > MAX_DIR_DISPLAY:
-                display_text = dir_name[: MAX_DIR_DISPLAY - 3] + "..."
-            else:
-                display_text = dir_name
+        display_text = sp.display_name()
+        if len(display_text) > MAX_DIR_DISPLAY:
+            display_text = display_text[: MAX_DIR_DISPLAY - 3] + "..."
 
         def open_cmd():
             self._editor.open(sp.directory, sp.type)
@@ -209,7 +198,7 @@ class SubProjectPanel(ttk.Frame):
 
         name_label = ttk.Label(row, text=display_text)
         name_label.pack(side="left", padx=(0, 8))
-        _create_tooltip(name_label, full_path)
+        _create_tooltip(name_label, sp.directory)
 
     def refresh_editor(self) -> None:
         """Refresh editor preference (e.g. after user changes it)."""

@@ -9,17 +9,20 @@
         {
           "id": "48d1e596-0bd4-424e-a83b-b5f7686bd1e0",
           "directory": "A:/Hello Teacher/Source Code/Halo_Teacher_Client_Firebase",
-          "type": "flutter"
+          "type": "flutter",
+          "name": null
         },
         {
           "id": "18bec36c-c923-43cf-8584-1d1d32d97491",
           "directory": "A:/Hello Teacher/Source Code/Halo_Teacher_Admin_Dashboard_Firebase",
-          "type": "admin_dashboard"
+          "type": "admin_dashboard",
+          "name": null
         },
         {
           "id": "11265aa5-d90e-4b93-9555-2f823fb3c936",
           "directory": "A:/Hello Teacher/Stripe test key.txt",
-          "type": "data_txt"
+          "type": "data_txt",
+          "name": "Key Test"
         }
       ],
       "open_count": 1
@@ -33,7 +36,8 @@
         {
           "id": "1b18f4ef-d366-43ad-a8f8-154d4c453aa1",
           "directory": "https://forum.cursor.com/t/taking-longer-than-expected/152616/35",
-          "type": "link"
+          "type": "link",
+          "name": null
         }
       ],
       "open_count": 1

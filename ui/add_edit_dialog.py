@@ -21,7 +21,7 @@ class AddEditDialog(tk.Toplevel):
         self.result: Project | None = None
 
         self.title("Edit Project" if project else "Add Project")
-        self.geometry("720x560")
+        self.geometry("800x560")
         self.transient(parent)
         self.grab_set()
 
@@ -112,7 +112,7 @@ class AddEditDialog(tk.Toplevel):
             widget.bind("<Button-4>", self._on_sub_mousewheel)  # Linux scroll up
             widget.bind("<Button-5>", self._on_sub_mousewheel)  # Linux scroll down
 
-        self._sub_rows: list[tuple[ttk.Frame, ttk.Label, tk.StringVar, tk.StringVar, str | None]] = []
+        self._sub_rows: list[tuple[ttk.Frame, ttk.Label, tk.StringVar, tk.StringVar, tk.StringVar, str | None]] = []
 
         main.rowconfigure(5, weight=1)
         btn_frame = ttk.Frame(main)
@@ -145,7 +145,7 @@ class AddEditDialog(tk.Toplevel):
         ph = parent.winfo_height()
         px = parent.winfo_rootx()
         py = parent.winfo_rooty()
-        dw, dh = 720, 560
+        dw, dh = 800, 560
         sw = parent.winfo_screenwidth()
         sh = parent.winfo_screenheight()
         if pw > 50 and ph > 50:
@@ -164,9 +164,10 @@ class AddEditDialog(tk.Toplevel):
         self._main_folder_var.set(self.project.main_project_folder or "")
         for sp in self.project.sub_projects:
             self._add_sub_row(
-                sp.directory,
-                ProjectType.display_name(sp.type),
-                sp.id,
+                directory=sp.directory,
+                type_value=ProjectType.display_name(sp.type),
+                sub_project_id=sp.id,
+                name=sp.name or "",
             )
 
     def _renumber_sub_rows(self) -> None:
@@ -179,10 +180,12 @@ class AddEditDialog(tk.Toplevel):
         directory: str = "",
         type_value: str = "general",
         sub_project_id: str | None = None,
+        name: str = "",
     ):
         row = ttk.Frame(self._sub_frame)
         row.pack(fill="x", pady=2)
 
+        name_var = tk.StringVar(value=name)
         dir_var = tk.StringVar(value=directory)
         type_var = tk.StringVar(value=type_value)
         row._sp_id = sub_project_id  # Preserve id when editing
@@ -190,11 +193,14 @@ class AddEditDialog(tk.Toplevel):
         num_label = ttk.Label(row, text="1", width=3, anchor="e")
         num_label.pack(side="left", padx=(0, 4))
 
+        ttk.Label(row, text="Name:", width=5).pack(side="left", padx=(0, 2))
+        ttk.Entry(row, textvariable=name_var, width=18).pack(side="left", padx=(0, 4))
+
         ttk.Button(
             row, text="Browse...", width=8,
             command=lambda: self._browse_path(dir_var, type_var),
         ).pack(side="left", padx=(0, 4))
-        ttk.Entry(row, textvariable=dir_var, width=45).pack(side="left", fill="x", expand=True, padx=4)
+        ttk.Entry(row, textvariable=dir_var, width=35).pack(side="left", fill="x", expand=True, padx=4)
 
         type_combo = ttk.Combobox(
             row,
@@ -217,13 +223,13 @@ class AddEditDialog(tk.Toplevel):
         def remove():
             row.destroy()
             self._sub_rows[:] = [
-                (r, nl, d, t, sid) for r, nl, d, t, sid in self._sub_rows if r != row
+                (r, nl, nv, d, t, sid) for r, nl, nv, d, t, sid in self._sub_rows if r != row
             ]
             self._renumber_sub_rows()
 
         ttk.Button(row, text="Remove", command=remove).pack(side="left", padx=4)
 
-        self._sub_rows.append((row, num_label, dir_var, type_var, sub_project_id))
+        self._sub_rows.append((row, num_label, name_var, dir_var, type_var, sub_project_id))
         self._renumber_sub_rows()
 
     def _browse_path(self, path_var: tk.StringVar, type_var: tk.StringVar):
@@ -348,7 +354,7 @@ class AddEditDialog(tk.Toplevel):
         main_project_folder = self._main_folder_var.get().strip() or None
 
         sub_projects = []
-        for row, num_label, dir_var, type_var, sp_id in self._sub_rows:
+        for row, num_label, name_var, dir_var, type_var, sp_id in self._sub_rows:
             d = dir_var.get().strip()
             if not d:
                 continue
@@ -359,11 +365,13 @@ class AddEditDialog(tk.Toplevel):
                     f"Please enter a valid URL (e.g. https://example.com) for the Link type.\n\nGot: {d[:50]}{'...' if len(d) > 50 else ''}",
                 )
                 return
+            custom_name = name_var.get().strip() or None
             sub_projects.append(
                 SubProject(
                     id=sp_id or str(uuid.uuid4()),
                     directory=d,
                     type=t,
+                    name=custom_name,
                 )
             )
 

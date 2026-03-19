@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Optional
 import uuid
 
@@ -56,12 +57,22 @@ class SubProject:
     id: str
     directory: str
     type: ProjectType
+    name: Optional[str] = None  # Custom display name; if None, use folder/link
+
+    def display_name(self) -> str:
+        """Display name for sidebar: custom name if set, else folder name or link."""
+        if self.name and self.name.strip():
+            return self.name.strip()
+        if self.type == ProjectType.LINK:
+            return self.directory
+        return Path(self.directory).name
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "directory": self.directory,
             "type": self.type.value,
+            "name": self.name,
         }
 
     @classmethod
@@ -70,6 +81,7 @@ class SubProject:
             id=data.get("id", str(uuid.uuid4())),
             directory=data["directory"],
             type=ProjectType(data.get("type", "general")),
+            name=data.get("name"),
         )
 
 
