@@ -160,3 +160,23 @@ class ProjectService:
         if getattr(sys, "frozen", False):
             return Path(sys._MEIPASS) / "assets" / "icons"
         return _app_dir() / "assets" / "icons"
+
+    @staticmethod
+    def default_icons_dir() -> Path:
+        """Path to the assets/icons/default_icon directory."""
+        return ProjectService.icons_dir() / "default_icon"
+
+    @staticmethod
+    def resolve_icon_path(icon_path: str | None) -> Path | None:
+        """
+        Resolve icon path. If it starts with 'default_icon:', resolve from default_icons_dir.
+        Otherwise return the path as-is if it exists.
+        """
+        if not icon_path:
+            return None
+        if icon_path.startswith("default_icon:"):
+            filename = icon_path[len("default_icon:"):]
+            resolved = ProjectService.default_icons_dir() / filename
+            return resolved if resolved.exists() else None
+        p = Path(icon_path)
+        return p if p.exists() else None

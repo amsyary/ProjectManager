@@ -18,8 +18,8 @@ class MainWindow:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Project Manager")
-        self.root.geometry("800x600")
-        self.root.minsize(600, 400)
+        self.root.geometry("950x600")
+        self.root.minsize(700, 400)
 
         self._project_service = ProjectService()
         self._selected_project: Project | None = None
@@ -103,7 +103,9 @@ class MainWindow:
         )
 
         self._sub_panel = SubProjectPanel(
-            content, on_sub_project_opened=self._on_sub_project_opened
+            content,
+            on_sub_project_opened=self._on_sub_project_opened,
+            on_edit_project=self._on_edit_project,
         )
         content.add(self._sub_panel, weight=1)
 
@@ -201,25 +203,18 @@ class MainWindow:
         if search:
             projects = [p for p in projects if search in p.name.lower()]
         projects.sort(key=lambda p: p.open_count, reverse=True)
-        row, col = 0, 0
-
-        add_btn = ttk.Button(
-            self._grid_inner,
-            text="+ Add Project",
-            command=self._on_add_project,
-            width=15,
-        )
-        add_btn.grid(row=0, column=0, padx=8, pady=8, sticky="nsew")
 
         for i, project in enumerate(projects):
-            row = (i + 1) // self.GRID_COLS
-            col = (i + 1) % self.GRID_COLS
+            row = i // self.GRID_COLS
+            col = i % self.GRID_COLS
+            is_selected = self._selected_project and self._selected_project.id == project.id
             card = ProjectCard(
                 self._grid_inner,
                 project,
                 on_click=self._on_project_click,
                 on_edit=self._on_edit_project,
                 on_delete=self._on_delete_project,
+                is_selected=is_selected,
             )
             card.grid(row=row, column=col, padx=8, pady=8, sticky="nsew")
             self._card_widgets.append(card)
@@ -236,6 +231,8 @@ class MainWindow:
 
     def _on_project_click(self, project: Project):
         self._selected_project = project
+        for card in self._card_widgets:
+            card.set_selected(card.project.id == project.id)
         self._sub_panel.set_project(project)
 
     def _on_edit_project(self, project: Project):

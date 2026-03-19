@@ -1,7 +1,8 @@
-"""Launch Cursor, VS Code, or Notepad for project paths."""
+"""Launch Cursor, VS Code, Notepad, or browser for project paths."""
 
 import os
 import subprocess
+import webbrowser
 from pathlib import Path
 from typing import Optional
 
@@ -73,6 +74,13 @@ class EditorLauncher:
                 return False
             try:
                 subprocess.Popen(f'notepad {_quote_path(path)}', shell=True)
+                return True
+            except Exception:
+                return False
+
+        if project_type == ProjectType.LINK:
+            try:
+                webbrowser.open(path)
                 return True
             except Exception:
                 return False

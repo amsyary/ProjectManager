@@ -27,17 +27,7 @@
       "args": [
         "-m",
         "PyInstaller",
-        "--onefile",
-        "--windowed",
-        "--name",
-        "ProjectManager",
-        "--add-data",
-        "config;config",
-        "--add-data",
-        "data;data",
-        "--add-data",
-        "assets;assets",
-        "main.py"
+        "ProjectManager.spec"
       ],
       "options": {
         "cwd": "${workspaceFolder}"

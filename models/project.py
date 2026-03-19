@@ -16,6 +16,7 @@ class ProjectType(str, Enum):
     DOCUMENTATION = "documentation"
     GENERAL = "general"
     DATA_TXT = "data_txt"
+    LINK = "link"
 
     @classmethod
     def display_name(cls, value: "ProjectType") -> str:
@@ -28,6 +29,7 @@ class ProjectType(str, Enum):
             ProjectType.DOCUMENTATION: "Documentation",
             ProjectType.GENERAL: "General",
             ProjectType.DATA_TXT: "Data File (txt)",
+            ProjectType.LINK: "Link",
         }
         return names.get(value, value.value)
 
@@ -35,6 +37,11 @@ class ProjectType(str, Enum):
     def is_file_type(cls, value: "ProjectType") -> bool:
         """True if this type uses a file picker instead of folder picker."""
         return value == ProjectType.DATA_TXT
+
+    @classmethod
+    def is_link_type(cls, value: "ProjectType") -> bool:
+        """True if this type uses a URL input instead of folder picker."""
+        return value == ProjectType.LINK
 
     @classmethod
     def icon_filename(cls, value: "ProjectType") -> str:

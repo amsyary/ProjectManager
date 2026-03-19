@@ -23,6 +23,20 @@
         }
       ],
       "open_count": 1
+    },
+    {
+      "id": "bc2f50be-f5fb-492b-9e2a-9419aebfb3fd",
+      "name": "Testing",
+      "icon_path": null,
+      "main_project_folder": null,
+      "sub_projects": [
+        {
+          "id": "1b18f4ef-d366-43ad-a8f8-154d4c453aa1",
+          "directory": "https://forum.cursor.com/t/taking-longer-than-expected/152616/35",
+          "type": "link"
+        }
+      ],
+      "open_count": 1
     }
   ]
 }

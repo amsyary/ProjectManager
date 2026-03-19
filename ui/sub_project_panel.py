@@ -1,14 +1,14 @@
 """Panel showing sub-projects of a selected project with Open buttons."""
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from pathlib import Path
 from typing import Callable
 
 from models.project import Project, SubProject, ProjectType
 from services.project_service import ProjectService
 from services.editor_launcher import EditorLauncher
-from ui.icon_loader import load_type_icon
+from ui.icon_loader import load_icon, load_type_icon
 
 MAX_DIR_DISPLAY = 35
 
@@ -73,6 +73,7 @@ class SubProjectPanel(ttk.Frame):
         self,
         parent,
         on_sub_project_opened: Callable[[Project], None] | None = None,
+        on_edit_project: Callable[[Project], None] | None = None,
         **kwargs,
     ):
         super().__init__(parent, **kwargs)
@@ -80,11 +81,17 @@ class SubProjectPanel(ttk.Frame):
         self._editor = EditorLauncher(ProjectService.get_editor())
         self._project: Project | None = None
         self._on_sub_project_opened = on_sub_project_opened
+        self._on_edit_project = on_edit_project
         self._build_ui()
 
     def _build_ui(self):
-        self._title = ttk.Label(self, text="", font=("", 10, "bold"))
-        self._title.pack(anchor="w", padx=4, pady=4)
+        self._title_frame = ttk.Frame(self)
+        self._title_frame.pack(anchor="w", padx=4, pady=4)
+        self._title_icon = ttk.Label(self._title_frame)
+        self._title_icon.pack(side="left", padx=(0, 6))
+        self._title_icon_image = None
+        self._title = ttk.Label(self._title_frame, text="", font=("", 10, "bold"))
+        self._title.pack(side="left")
 
         self._list_frame = ttk.Frame(self)
         self._list_frame.pack(fill="both", expand=True)
@@ -101,6 +108,8 @@ class SubProjectPanel(ttk.Frame):
             w.destroy()
 
         if project is None:
+            self._title_icon.config(image="")
+            self._title_icon_image = None
             self._title.config(text="")
             self._empty_label = ttk.Label(
                 self._list_frame, text="Select a project to see sub-projects"
@@ -109,30 +118,52 @@ class SubProjectPanel(ttk.Frame):
             return
 
         self._title.config(text=f"Sub-projects: {project.name}")
+        self._title_icon_image = None
+        if project.icon_path:
+            img = load_icon(project.icon_path, (32, 32))
+            if img:
+                self._title_icon_image = img
+                self._title_icon.config(image=img)
+            else:
+                self._title_icon.config(image="")
+        else:
+            self._title_icon.config(image="")
 
         has_main_folder = bool(project.main_project_folder)
         has_sub_projects = bool(project.sub_projects)
 
-        if has_main_folder or has_sub_projects:
-            btn_bar = ttk.Frame(self._list_frame)
-            btn_bar.pack(fill="x", pady=(0, 8))
+        btn_bar = ttk.Frame(self._list_frame)
+        btn_bar.pack(fill="x", pady=(0, 8))
 
-            if has_main_folder:
-                def open_project_folder():
-                    self._editor.open_in_explorer(project.main_project_folder)
+        def open_project_folder():
+            if project.main_project_folder:
+                self._editor.open_in_explorer(project.main_project_folder)
+            else:
+                messagebox.showinfo(
+                    "Project Folder",
+                    "Project folder is not set. Edit the project to add a main project folder.",
+                )
 
-                ttk.Button(
-                    btn_bar, text="Project Folder", command=open_project_folder
-                ).pack(side="left", padx=(0, 8))
+        ttk.Button(
+            btn_bar, text="Project Folder", command=open_project_folder
+        ).pack(side="left", padx=(0, 8))
 
-            if has_sub_projects:
-                def open_all():
-                    for sp in project.sub_projects:
-                        self._editor.open(sp.directory, sp.type)
-                        if self._on_sub_project_opened:
-                            self._on_sub_project_opened(project)
+        def edit_project():
+            if self._on_edit_project:
+                self._on_edit_project(project)
 
-                ttk.Button(btn_bar, text="Open All", command=open_all).pack(side="left")
+        ttk.Button(btn_bar, text="Edit Project", command=edit_project).pack(
+            side="left", padx=(0, 8)
+        )
+
+        if has_sub_projects:
+            def open_all():
+                for sp in project.sub_projects:
+                    self._editor.open(sp.directory, sp.type)
+                    if self._on_sub_project_opened:
+                        self._on_sub_project_opened(project)
+
+            ttk.Button(btn_bar, text="Open All", command=open_all).pack(side="left")
 
         if has_sub_projects:
             for sp in project.sub_projects:
@@ -155,11 +186,18 @@ class SubProjectPanel(ttk.Frame):
             )
 
         full_path = sp.directory
-        dir_name = Path(full_path).name
-        if len(dir_name) > MAX_DIR_DISPLAY:
-            display_text = dir_name[: MAX_DIR_DISPLAY - 3] + "..."
+        if sp.type == ProjectType.LINK:
+            display_text = (
+                full_path[: MAX_DIR_DISPLAY - 3] + "..."
+                if len(full_path) > MAX_DIR_DISPLAY
+                else full_path
+            )
         else:
-            display_text = dir_name
+            dir_name = Path(full_path).name
+            if len(dir_name) > MAX_DIR_DISPLAY:
+                display_text = dir_name[: MAX_DIR_DISPLAY - 3] + "..."
+            else:
+                display_text = dir_name
 
         def open_cmd():
             self._editor.open(sp.directory, sp.type)
