@@ -18,6 +18,7 @@ class ProjectType(str, Enum):
     GENERAL = "general"
     DATA_TXT = "data_txt"
     LINK = "link"
+    EXECUTE = "execute"
 
     @classmethod
     def display_name(cls, value: "ProjectType") -> str:
@@ -31,13 +32,19 @@ class ProjectType(str, Enum):
             ProjectType.GENERAL: "General",
             ProjectType.DATA_TXT: "Data File (txt)",
             ProjectType.LINK: "Link",
+            ProjectType.EXECUTE: "Execute / Open file",
         }
         return names.get(value, value.value)
 
     @classmethod
     def is_file_type(cls, value: "ProjectType") -> bool:
-        """True if this type uses a file picker instead of folder picker."""
-        return value == ProjectType.DATA_TXT
+        """True if this type uses a file picker (not folder) for Browse."""
+        return value in (ProjectType.DATA_TXT, ProjectType.EXECUTE)
+
+    @classmethod
+    def is_execute_type(cls, value: "ProjectType") -> bool:
+        """True if Open should launch the file with the system default app."""
+        return value == ProjectType.EXECUTE
 
     @classmethod
     def is_link_type(cls, value: "ProjectType") -> bool:

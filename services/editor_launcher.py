@@ -1,7 +1,8 @@
-"""Launch Cursor, VS Code, Notepad, or browser for project paths."""
+"""Launch Cursor, VS Code, Notepad, browser, or system default app for paths."""
 
 import os
 import subprocess
+import sys
 import webbrowser
 from pathlib import Path
 from typing import Optional
@@ -69,6 +70,27 @@ class EditorLauncher:
         if not path:
             return False
 
+        if project_type == ProjectType.LINK:
+            try:
+                webbrowser.open(path)
+                return True
+            except Exception:
+                return False
+
+        if project_type == ProjectType.EXECUTE:
+            if not os.path.isfile(path):
+                return False
+            try:
+                if os.name == "nt":
+                    os.startfile(path)
+                elif sys.platform == "darwin":
+                    subprocess.Popen(["open", path])
+                else:
+                    subprocess.Popen(["xdg-open", path])
+                return True
+            except Exception:
+                return False
+
         if project_type == ProjectType.DATA_TXT:
             if not os.path.isfile(path):
                 return False
@@ -78,14 +100,8 @@ class EditorLauncher:
             except Exception:
                 return False
 
-        if project_type == ProjectType.LINK:
-            try:
-                webbrowser.open(path)
-                return True
-            except Exception:
-                return False
-
-        if not os.path.isdir(path):
+        # Flutter, Admin Dashboard, etc.: open file or folder in the chosen editor
+        if not (os.path.isfile(path) or os.path.isdir(path)):
             return False
 
         cmd = self._get_editor_command()

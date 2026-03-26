@@ -1,5 +1,6 @@
 """Add/Edit project dialog."""
 
+import os
 import uuid
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
@@ -213,6 +214,7 @@ class AddEditDialog(tk.Toplevel):
                 ProjectType.display_name(ProjectType.DOCUMENTATION),
                 ProjectType.display_name(ProjectType.GENERAL),
                 ProjectType.display_name(ProjectType.DATA_TXT),
+                ProjectType.display_name(ProjectType.EXECUTE),
                 ProjectType.display_name(ProjectType.LINK),
             ],
             state="readonly",
@@ -233,12 +235,8 @@ class AddEditDialog(tk.Toplevel):
         self._renumber_sub_rows()
 
     def _browse_path(self, path_var: tk.StringVar, type_var: tk.StringVar):
-        if type_var.get() == ProjectType.display_name(ProjectType.DATA_TXT):
-            path = filedialog.askopenfilename(
-                title="Select .txt file",
-                filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
-            )
-        elif type_var.get() == ProjectType.display_name(ProjectType.LINK):
+        display = type_var.get()
+        if display == ProjectType.display_name(ProjectType.LINK):
             url = simpledialog.askstring(
                 "Enter URL",
                 "Enter the URL to open in browser:",
@@ -246,10 +244,26 @@ class AddEditDialog(tk.Toplevel):
             )
             if url:
                 path_var.set(url.strip())
+            return
+
+        if display == ProjectType.display_name(ProjectType.DATA_TXT):
+            path = filedialog.askopenfilename(
+                title="Select text file",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            )
+        elif display == ProjectType.display_name(ProjectType.EXECUTE):
+            path = filedialog.askopenfilename(
+                title="Select file to open or run",
+                filetypes=[("All files", "*.*")],
+            )
         else:
-            path = filedialog.askdirectory(title="Select project directory")
-            if path:
-                path_var.set(path)
+            # Flutter, Admin Dashboard, etc.: pick a file (opens in Cursor / VS Code)
+            path = filedialog.askopenfilename(
+                title="Select file",
+                filetypes=[("All files", "*.*")],
+            )
+        if path:
+            path_var.set(path)
 
     def _update_icon_preview(self) -> None:
         """Update the icon preview based on current icon_path."""
@@ -363,6 +377,12 @@ class AddEditDialog(tk.Toplevel):
                 messagebox.showerror(
                     "Invalid URL",
                     f"Please enter a valid URL (e.g. https://example.com) for the Link type.\n\nGot: {d[:50]}{'...' if len(d) > 50 else ''}",
+                )
+                return
+            if t == ProjectType.EXECUTE and not os.path.isfile(d):
+                messagebox.showerror(
+                    "Invalid file",
+                    "Execute / Open file requires an existing file path.",
                 )
                 return
             custom_name = name_var.get().strip() or None
