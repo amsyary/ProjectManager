@@ -257,11 +257,8 @@ class AddEditDialog(tk.Toplevel):
                 filetypes=[("All files", "*.*")],
             )
         else:
-            # Flutter, Admin Dashboard, etc.: pick a file (opens in Cursor / VS Code)
-            path = filedialog.askopenfilename(
-                title="Select file",
-                filetypes=[("All files", "*.*")],
-            )
+            # Flutter, Admin Dashboard, etc.: folder opens in Cursor / VS Code (file picker cannot select folders)
+            path = filedialog.askdirectory(title="Select project folder")
         if path:
             path_var.set(path)
 

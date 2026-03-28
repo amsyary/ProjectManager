@@ -55,8 +55,9 @@ class MainWindow:
         content = ttk.PanedWindow(self.root, orient="horizontal")
         content.pack(fill="both", expand=True, padx=8, pady=8)
 
-        left_frame = ttk.Frame(content)
-        content.add(left_frame, weight=2)
+        self._left_frame = ttk.Frame(content)
+        content.add(self._left_frame, weight=2)
+        left_frame = self._left_frame
 
         grid_header = ttk.Frame(left_frame)
         grid_header.pack(fill="x")
@@ -101,6 +102,11 @@ class MainWindow:
                 self._canvas_window, width=e.width
             ),
         )
+        # Wheel goes to the widget under the cursor (cards), not the canvas — bind the whole left column.
+        self._bind_wheel_scroll_tree(left_frame)
+        self._canvas.bind("<MouseWheel>", self._on_grid_mousewheel)
+        self._canvas.bind("<Button-4>", self._on_grid_mousewheel)
+        self._canvas.bind("<Button-5>", self._on_grid_mousewheel)
 
         self._sub_panel = SubProjectPanel(
             content,
@@ -180,6 +186,26 @@ class MainWindow:
         self._refresh_grid()
         messagebox.showinfo("Import", f"Imported {len(projects)} project(s).")
 
+    def _on_grid_mousewheel(self, event: tk.Event) -> None:
+        """Scroll project grid; bound on canvas and recursively on grid widgets."""
+        num = getattr(event, "num", None)
+        if num == 4:
+            self._canvas.yview_scroll(-1, "units")
+        elif num == 5:
+            self._canvas.yview_scroll(1, "units")
+        else:
+            delta = getattr(event, "delta", 0)
+            if delta:
+                self._canvas.yview_scroll(int(-1 * (delta / 120)), "units")
+
+    def _bind_wheel_scroll_tree(self, widget: tk.Widget) -> None:
+        """So wheel works when the pointer is over project cards, not only the scrollbar."""
+        widget.bind("<MouseWheel>", self._on_grid_mousewheel)
+        widget.bind("<Button-4>", self._on_grid_mousewheel)
+        widget.bind("<Button-5>", self._on_grid_mousewheel)
+        for child in widget.winfo_children():
+            self._bind_wheel_scroll_tree(child)
+
     def _on_editor_change(self, event=None):
         display = self._editor_var.get()
         editor = self._editor_display.get(display, "cursor")
@@ -221,6 +247,9 @@ class MainWindow:
 
         for c in range(self.GRID_COLS):
             self._grid_inner.columnconfigure(c, weight=1)
+
+        # New cards are recreated each refresh; re-bind wheel on the grid subtree only.
+        self._bind_wheel_scroll_tree(self._grid_inner)
 
     def _on_add_project(self):
         def on_save(project: Project):
