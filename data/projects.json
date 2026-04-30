@@ -25,7 +25,7 @@
           "name": "Key Test"
         }
       ],
-      "open_count": 1
+      "open_count": 2
     },
     {
       "id": "bc2f50be-f5fb-492b-9e2a-9419aebfb3fd",
@@ -41,6 +41,12 @@
         }
       ],
       "open_count": 1
+    }
+  ],
+  "text_snippets": [
+    {
+      "id": "4bcad139-1b20-4c12-8cc7-d154dbbf55f2",
+      "content": "testing"
     }
   ]
 }

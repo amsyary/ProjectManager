@@ -27,6 +27,7 @@
       "args": [
         "-m",
         "PyInstaller",
+        "--clean",
         "ProjectManager.spec"
       ],
       "options": {

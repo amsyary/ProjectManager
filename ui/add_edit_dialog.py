@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from models.project import Project, SubProject, ProjectType
 from services.project_service import ProjectService
 from ui.icon_loader import load_icon
+from ui.theme import ThemeManager
 
 
 class AddEditDialog(tk.Toplevel):
@@ -50,7 +51,8 @@ class AddEditDialog(tk.Toplevel):
 
         preview_frame = ttk.Frame(icon_section)
         preview_frame.pack(side="left", padx=(0, 12))
-        self._icon_preview = tk.Label(preview_frame, text="(no icon)", width=8, height=3)
+        self._icon_preview = tk.Label(preview_frame, text="(no icon)", width=8, height=3,
+                                      bg=_c["bg"], fg=_c["fg"])
         self._icon_preview.pack()
         self._icon_preview_image = None
 
@@ -96,7 +98,9 @@ class AddEditDialog(tk.Toplevel):
         # Scrollable container for sub-projects
         sub_container = ttk.Frame(main)
         sub_container.grid(row=5, column=0, columnspan=2, sticky="nsew", pady=4)
-        self._sub_canvas = tk.Canvas(sub_container, highlightthickness=0)
+        _c = ThemeManager().colors
+        self.configure(bg=_c["bg"])
+        self._sub_canvas = tk.Canvas(sub_container, highlightthickness=0, bg=_c["bg"])
         self._sub_scrollbar = ttk.Scrollbar(sub_container, orient="vertical", command=self._sub_canvas.yview)
         self._sub_frame = ttk.Frame(self._sub_canvas)
         self._sub_frame.bind(
@@ -303,6 +307,8 @@ class AddEditDialog(tk.Toplevel):
         popup.title("Choose default icon")
         popup.transient(self)
         popup.grab_set()
+        c = ThemeManager().colors
+        popup.configure(bg=c["bg"])
 
         inner = ttk.Frame(popup, padding=10)
         inner.pack()
@@ -319,6 +325,8 @@ class AddEditDialog(tk.Toplevel):
                 btn = tk.Button(
                     grid_frame, image=img, cursor="hand2",
                     command=lambda p=icon_path: self._on_default_icon_selected(popup, p),
+                    bg=c["bg"], activebackground=c["select_bg"],
+                    relief="flat", bd=1,
                 )
                 btn.image = img
                 btn.grid(row=row, column=col, padx=4, pady=4)

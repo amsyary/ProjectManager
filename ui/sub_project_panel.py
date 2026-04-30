@@ -8,6 +8,7 @@ from models.project import Project, SubProject, ProjectType
 from services.project_service import ProjectService
 from services.editor_launcher import EditorLauncher
 from ui.icon_loader import load_icon, load_type_icon
+from ui.theme import ThemeManager
 
 MAX_DIR_DISPLAY = 35
 
@@ -29,11 +30,13 @@ def _create_tooltip(widget: tk.Widget, text: str, delay_ms: int = 500) -> None:
         tooltip = tk.Toplevel(widget)
         tooltip.wm_overrideredirect(True)
         tooltip.wm_geometry("+0+0")
+        c = ThemeManager().colors
         lbl = tk.Label(
             tooltip,
             text=text,
             justify="left",
-            background="#ffffe0",
+            background=c["tooltip_bg"],
+            foreground=c["tooltip_fg"],
             relief="solid",
             borderwidth=1,
             padx=4,

@@ -1,4 +1,4 @@
-"""Data models for Project and SubProject."""
+"""Data models for Project, SubProject, and TextSnippet."""
 
 from dataclasses import dataclass, field
 from enum import Enum
@@ -124,4 +124,22 @@ class Project:
                 SubProject.from_dict(sp) for sp in data.get("sub_projects", [])
             ],
             open_count=data.get("open_count", 0),
+        )
+
+
+@dataclass
+class TextSnippet:
+    """A saved text snippet for quick copy/paste."""
+
+    id: str
+    content: str
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "content": self.content}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "TextSnippet":
+        return cls(
+            id=data.get("id", str(uuid.uuid4())),
+            content=data.get("content", ""),
         )

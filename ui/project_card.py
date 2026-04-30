@@ -6,6 +6,7 @@ from tkinter import ttk
 from models.project import Project
 from ui.icon_loader import load_icon
 from services.project_service import ProjectService
+from ui.theme import ThemeManager
 
 
 class ProjectCard(tk.Frame):
@@ -33,7 +34,7 @@ class ProjectCard(tk.Frame):
         self.set_selected(is_selected)
 
     def _build_ui(self):
-        self.configure(padx=8, pady=8)
+        self.configure(padx=8, pady=8, bg=ThemeManager().colors["bg_card"])
         self.bind("<Button-1>", self._on_left_click)
         self.bind("<Double-Button-1>", self._on_double_click)
         self.bind("<Button-3>", self._on_right_click)

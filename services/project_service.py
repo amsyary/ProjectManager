@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from models.project import Project, SubProject
+from models.project import Project, SubProject, TextSnippet
 
 
 def _app_dir() -> Path:
@@ -27,11 +27,28 @@ def _settings_path() -> Path:
     return path
 
 
+def _read_settings() -> dict:
+    path = _settings_path()
+    if path.exists():
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, KeyError):
+            pass
+    return {}
+
+
+def _write_settings(data: dict) -> None:
+    with open(_settings_path(), "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
 class ProjectService:
     """Service for loading, saving, and managing projects."""
 
     def __init__(self):
         self._projects: list[Project] = []
+        self._snippets: list[TextSnippet] = []
         self._load_projects()
 
     def _load_projects(self) -> None:
@@ -43,15 +60,23 @@ class ProjectService:
                 self._projects = [
                     Project.from_dict(p) for p in data.get("projects", [])
                 ]
+                self._snippets = [
+                    TextSnippet.from_dict(s) for s in data.get("text_snippets", [])
+                ]
             except (json.JSONDecodeError, KeyError):
                 self._projects = []
+                self._snippets = []
         else:
             self._projects = []
+            self._snippets = []
             self._save_projects()
 
     def _save_projects(self) -> None:
         path = _projects_path()
-        data = {"projects": [p.to_dict() for p in self._projects]}
+        data = {
+            "projects": [p.to_dict() for p in self._projects],
+            "text_snippets": [s.to_dict() for s in self._snippets],
+        }
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
@@ -98,10 +123,40 @@ class ProjectService:
                 return True
         return False
 
+    def get_snippets(self) -> list[TextSnippet]:
+        """Return all text snippets."""
+        return list(self._snippets)
+
+    def add_snippet(self, snippet: TextSnippet) -> None:
+        """Add a new text snippet and save."""
+        self._snippets.append(snippet)
+        self._save_projects()
+
+    def update_snippet(self, snippet: TextSnippet) -> bool:
+        """Update an existing text snippet. Returns True if found."""
+        for i, s in enumerate(self._snippets):
+            if s.id == snippet.id:
+                self._snippets[i] = snippet
+                self._save_projects()
+                return True
+        return False
+
+    def delete_snippet(self, snippet_id: str) -> bool:
+        """Delete a text snippet by ID. Returns True if found and deleted."""
+        for i, s in enumerate(self._snippets):
+            if s.id == snippet_id:
+                del self._snippets[i]
+                self._save_projects()
+                return True
+        return False
+
     def export_to_file(self, path: str | Path) -> bool:
-        """Export projects to a JSON file. Returns True on success."""
+        """Export projects and snippets to a JSON file. Returns True on success."""
         try:
-            data = {"projects": [p.to_dict() for p in self._projects]}
+            data = {
+                "projects": [p.to_dict() for p in self._projects],
+                "text_snippets": [s.to_dict() for s in self._snippets],
+            }
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
             return True
@@ -135,24 +190,27 @@ class ProjectService:
 
     @staticmethod
     def get_editor() -> str:
-        """Get saved editor preference (cursor or code)."""
-        path = _settings_path()
-        if path.exists():
-            try:
-                with open(path, encoding="utf-8") as f:
-                    data = json.load(f)
-                return data.get("editor", "cursor")
-            except (json.JSONDecodeError, KeyError):
-                pass
-        return "cursor"
+        """Get saved editor preference (cursor, code, or antigravity)."""
+        return _read_settings().get("editor", "cursor")
 
     @staticmethod
     def set_editor(editor: str) -> None:
         """Save editor preference."""
-        path = _settings_path()
-        data = {"editor": editor.lower() if editor else "cursor"}
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        data = _read_settings()
+        data["editor"] = editor.lower() if editor else "cursor"
+        _write_settings(data)
+
+    @staticmethod
+    def get_theme() -> str:
+        """Get saved theme preference ('light' or 'dark')."""
+        return _read_settings().get("theme", "light")
+
+    @staticmethod
+    def set_theme(theme: str) -> None:
+        """Save theme preference ('light' or 'dark')."""
+        data = _read_settings()
+        data["theme"] = theme
+        _write_settings(data)
 
     @staticmethod
     def icons_dir() -> Path:
