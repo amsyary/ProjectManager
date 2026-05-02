@@ -35,6 +35,9 @@ class AddEditDialog(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
 
     def _build_ui(self):
+        _c = ThemeManager().colors
+        self.configure(bg=_c["bg"])
+
         main = ttk.Frame(self, padding=10)
         main.pack(fill="both", expand=True)
 
@@ -98,8 +101,6 @@ class AddEditDialog(tk.Toplevel):
         # Scrollable container for sub-projects
         sub_container = ttk.Frame(main)
         sub_container.grid(row=5, column=0, columnspan=2, sticky="nsew", pady=4)
-        _c = ThemeManager().colors
-        self.configure(bg=_c["bg"])
         self._sub_canvas = tk.Canvas(sub_container, highlightthickness=0, bg=_c["bg"])
         self._sub_scrollbar = ttk.Scrollbar(sub_container, orient="vertical", command=self._sub_canvas.yview)
         self._sub_frame = ttk.Frame(self._sub_canvas)
