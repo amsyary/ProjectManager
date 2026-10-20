@@ -1,4 +1,4 @@
-"""Data models for Project, SubProject, and TextSnippet."""
+"""Data models for Project, SubProject, SubProjectCommand, and TextSnippet."""
 
 from dataclasses import dataclass, field
 from enum import Enum
@@ -30,7 +30,7 @@ class ProjectType(str, Enum):
             ProjectType.WEB_VERSION: "Web Version",
             ProjectType.DOCUMENTATION: "Documentation",
             ProjectType.GENERAL: "General",
-            ProjectType.DATA_TXT: "Data File (txt)",
+            ProjectType.DATA_TXT: "Data File (Notepad)",
             ProjectType.LINK: "Link",
             ProjectType.EXECUTE: "Execute / Open file",
         }
@@ -58,6 +58,36 @@ class ProjectType(str, Enum):
 
 
 @dataclass
+class SubProjectCommand:
+    """A terminal command saved on a sub-project, e.g. "npm run dev"."""
+
+    command: str
+    name: Optional[str] = None  # Label shown in the Run menu; if None, show the command
+    run_on_open: bool = False  # Also run in a terminal when the sub-project is opened
+
+    def display_name(self) -> str:
+        """Label for the Run menu: custom name if set, else the command itself."""
+        if self.name and self.name.strip():
+            return self.name.strip()
+        return self.command
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "command": self.command,
+            "run_on_open": self.run_on_open,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SubProjectCommand":
+        return cls(
+            command=data.get("command", ""),
+            name=data.get("name"),
+            run_on_open=bool(data.get("run_on_open", False)),
+        )
+
+
+@dataclass
 class SubProject:
     """A sub-project (directory) within a project."""
 
@@ -65,6 +95,7 @@ class SubProject:
     directory: str
     type: ProjectType
     name: Optional[str] = None  # Custom display name; if None, use folder/link
+    commands: list[SubProjectCommand] = field(default_factory=list)
 
     def display_name(self) -> str:
         """Display name for sidebar: custom name if set, else folder name or link."""
@@ -80,15 +111,23 @@ class SubProject:
             "directory": self.directory,
             "type": self.type.value,
             "name": self.name,
+            "commands": [c.to_dict() for c in self.commands],
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "SubProject":
+        commands = [SubProjectCommand.from_dict(c) for c in data.get("commands", [])]
+        if not commands and data.get("command"):
+            # Older format: a single "command" + "run_on_open" on the sub-project
+            commands = [SubProjectCommand(
+                command=data["command"], run_on_open=bool(data.get("run_on_open", False))
+            )]
         return cls(
             id=data.get("id", str(uuid.uuid4())),
             directory=data["directory"],
             type=ProjectType(data.get("type", "general")),
             name=data.get("name"),
+            commands=commands,
         )
 
 

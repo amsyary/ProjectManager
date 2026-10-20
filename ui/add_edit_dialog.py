@@ -7,7 +7,8 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 from pathlib import Path
 from urllib.parse import urlparse
 
-from models.project import Project, SubProject, ProjectType
+from models.project import Project, SubProject, SubProjectCommand, ProjectType
+from ui.commands_dialog import CommandsDialog
 from services.project_service import ProjectService
 from ui.icon_loader import load_icon
 from ui.theme import ThemeManager
@@ -118,7 +119,8 @@ class AddEditDialog(tk.Toplevel):
             widget.bind("<Button-4>", self._on_sub_mousewheel)  # Linux scroll up
             widget.bind("<Button-5>", self._on_sub_mousewheel)  # Linux scroll down
 
-        self._sub_rows: list[tuple[ttk.Frame, ttk.Label, tk.StringVar, tk.StringVar, tk.StringVar, str | None]] = []
+        # (row, num_label, name_var, dir_var, type_var, commands, sub_project_id)
+        self._sub_rows: list[tuple] = []
 
         main.rowconfigure(5, weight=1)
         btn_frame = ttk.Frame(main)
@@ -174,6 +176,7 @@ class AddEditDialog(tk.Toplevel):
                 type_value=ProjectType.display_name(sp.type),
                 sub_project_id=sp.id,
                 name=sp.name or "",
+                commands=list(sp.commands),
             )
 
     def _renumber_sub_rows(self) -> None:
@@ -187,6 +190,7 @@ class AddEditDialog(tk.Toplevel):
         type_value: str = "general",
         sub_project_id: str | None = None,
         name: str = "",
+        commands: list[SubProjectCommand] | None = None,
     ):
         row = ttk.Frame(self._sub_frame)
         row.pack(fill="x", pady=2)
@@ -194,6 +198,7 @@ class AddEditDialog(tk.Toplevel):
         name_var = tk.StringVar(value=name)
         dir_var = tk.StringVar(value=directory)
         type_var = tk.StringVar(value=type_value)
+        commands = list(commands or [])  # Edited in place by the Commands popup
         row._sp_id = sub_project_id  # Preserve id when editing
 
         num_label = ttk.Label(row, text="1", width=3, anchor="e")
@@ -206,7 +211,7 @@ class AddEditDialog(tk.Toplevel):
             row, text="Browse...", width=8,
             command=lambda: self._browse_path(dir_var, type_var),
         ).pack(side="left", padx=(0, 4))
-        ttk.Entry(row, textvariable=dir_var, width=35).pack(side="left", fill="x", expand=True, padx=4)
+        ttk.Entry(row, textvariable=dir_var, width=28).pack(side="left", fill="x", expand=True, padx=4)
 
         type_combo = ttk.Combobox(
             row,
@@ -229,14 +234,34 @@ class AddEditDialog(tk.Toplevel):
 
         def remove():
             row.destroy()
-            self._sub_rows[:] = [
-                (r, nl, nv, d, t, sid) for r, nl, nv, d, t, sid in self._sub_rows if r != row
-            ]
+            self._sub_rows[:] = [r for r in self._sub_rows if r[0] != row]
             self._renumber_sub_rows()
+
+        # Optional terminal commands (e.g. npm run dev), edited in a popup to keep rows compact
+        commands_btn = ttk.Button(row, width=14)
+        commands_btn.pack(side="left", padx=4)
+
+        def update_commands_btn():
+            commands_btn.config(
+                text=f"Commands ({len(commands)})" if commands else "+ Commands"
+            )
+
+        def set_commands(new_commands: list[SubProjectCommand]):
+            commands[:] = new_commands
+            update_commands_btn()
+
+        def edit_commands():
+            label = name_var.get().strip() or Path(dir_var.get().strip()).name or "sub-project"
+            CommandsDialog(self, commands, title=f"Commands: {label}", on_save=set_commands)
+
+        commands_btn.config(command=edit_commands)
+        update_commands_btn()
 
         ttk.Button(row, text="Remove", command=remove).pack(side="left", padx=4)
 
-        self._sub_rows.append((row, num_label, name_var, dir_var, type_var, sub_project_id))
+        self._sub_rows.append(
+            (row, num_label, name_var, dir_var, type_var, commands, sub_project_id)
+        )
         self._renumber_sub_rows()
 
     def _browse_path(self, path_var: tk.StringVar, type_var: tk.StringVar):
@@ -253,8 +278,12 @@ class AddEditDialog(tk.Toplevel):
 
         if display == ProjectType.display_name(ProjectType.DATA_TXT):
             path = filedialog.askopenfilename(
-                title="Select text file",
-                filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+                title="Select file to open in Notepad",
+                filetypes=[
+                    ("All files", "*.*"),
+                    ("Text files", "*.txt *.md *.log *.csv"),
+                    ("Config files", "*.json *.yaml *.yml *.env *.ini *.xml *.toml"),
+                ],
             )
         elif display == ProjectType.display_name(ProjectType.EXECUTE):
             path = filedialog.askopenfilename(
@@ -374,7 +403,7 @@ class AddEditDialog(tk.Toplevel):
         main_project_folder = self._main_folder_var.get().strip() or None
 
         sub_projects = []
-        for row, num_label, name_var, dir_var, type_var, sp_id in self._sub_rows:
+        for row, num_label, name_var, dir_var, type_var, commands, sp_id in self._sub_rows:
             d = dir_var.get().strip()
             if not d:
                 continue
@@ -398,6 +427,7 @@ class AddEditDialog(tk.Toplevel):
                     directory=d,
                     type=t,
                     name=custom_name,
+                    commands=list(commands),
                 )
             )
 

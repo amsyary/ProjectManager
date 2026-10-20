@@ -112,7 +112,7 @@ class EditorLauncher:
 
         Args:
             path: Absolute path to the project directory or file.
-            project_type: Optional type; for DATA_TXT opens in Notepad.
+            project_type: Optional type; DATA_TXT opens any file in Notepad.
 
         Returns:
             True if launch was attempted successfully, False otherwise.

@@ -11,11 +11,13 @@ Project Manager helps developers who work with many projects—especially those 
 - **Grid view** – See all projects at a glance with optional custom icons
 - **Sub-projects** – Each project can have multiple directories (e.g., Flutter, Admin Dashboard, Cloud Function, Web, Documentation)
 - **Quick open** – Open sub-projects in Cursor or VS Code; open the main project folder in Windows Explorer
-- **Project types** – Categorize sub-projects: Flutter, Admin Dashboard, Cloud Function, Web Version, Documentation, General, or Data File (.txt)
+- **Project types** – Categorize sub-projects: Flutter, Admin Dashboard, Cloud Function, Web Version, Documentation, General, or Data File
 - **Most-used sorting** – Projects you open most often move to the top
 - **Search** – Filter projects by name
 - **Export/Import** – Backup and restore your project list as JSON
-- **Data File (.txt)** – Add .txt files that open in Notepad
+- **Data File** – Add any file (.txt, .env, .json, .md, ...) that opens in Notepad
+- **Terminal** – Open a sub-project (or the main project folder) in Windows Terminal, PowerShell, PowerShell 7, Command Prompt, or Git Bash
+- **Commands** – Give a sub-project one or more terminal commands (e.g. `npm run dev`, `npm run build`) via its "+ Commands" button. Click "Run" to start one in the sub-project folder (with several, pick from the menu or "Run all"); tick "Run when opened" to start a command automatically with "Open" / "Open All"
 
 ## Requirements
 
@@ -51,7 +53,8 @@ Or use the VS Code task: **Terminal → Run Task → Build: Windows executable**
 1. **Add a project** – Click "+ Add Project", enter a name, optionally set an icon and main project folder, then add sub-projects (directory + type).
 2. **Open projects** – Click a project to see its sub-projects. Use "Project Folder" to open the main folder in Explorer, or "Open All" / "Open" to open sub-projects in Cursor or VS Code.
 3. **Editor choice** – Use the dropdown at the top to switch between Cursor and VS Code. Your choice is saved.
-4. **Edit/Delete** – Right-click a project card for Edit or Delete.
+4. **Terminal choice** – Use the "Terminal" dropdown at the top to pick which terminal "Terminal" and "Run" open. Your choice is saved.
+5. **Edit/Delete** – Right-click a project card for Edit or Delete.
 
 ## Project Structure
 

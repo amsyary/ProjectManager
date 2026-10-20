@@ -201,6 +201,18 @@ class ProjectService:
         _write_settings(data)
 
     @staticmethod
+    def get_terminal() -> str:
+        """Get saved terminal preference (windows_terminal, powershell, pwsh, cmd, git_bash)."""
+        return _read_settings().get("terminal", "windows_terminal")
+
+    @staticmethod
+    def set_terminal(terminal: str) -> None:
+        """Save terminal preference."""
+        data = _read_settings()
+        data["terminal"] = terminal or "windows_terminal"
+        _write_settings(data)
+
+    @staticmethod
     def get_theme() -> str:
         """Get saved theme preference ('light' or 'dark')."""
         return _read_settings().get("theme", "light")

@@ -5,6 +5,7 @@ from tkinter import ttk, messagebox, filedialog
 
 from models.project import Project
 from services.project_service import ProjectService
+from services.terminal_launcher import TERMINALS
 from ui.project_card import ProjectCard
 from ui.add_edit_dialog import AddEditDialog
 from ui.sub_project_panel import SubProjectPanel
@@ -58,6 +59,21 @@ class MainWindow:
         self._editor_var.set(self._editor_reverse.get(saved, "Cursor"))
         editor_combo.pack(side="left", padx=(0, 16))
         editor_combo.bind("<<ComboboxSelected>>", self._on_editor_change)
+
+        ttk.Label(top_bar, text="Terminal:").pack(side="left", padx=(0, 8))
+        self._terminal_reverse = {v: k for k, v in TERMINALS.items()}
+        self._terminal_var = tk.StringVar(
+            value=TERMINALS.get(ProjectService.get_terminal(), TERMINALS["windows_terminal"])
+        )
+        terminal_combo = ttk.Combobox(
+            top_bar,
+            textvariable=self._terminal_var,
+            values=list(TERMINALS.values()),
+            state="readonly",
+            width=18,
+        )
+        terminal_combo.pack(side="left", padx=(0, 16))
+        terminal_combo.bind("<<ComboboxSelected>>", self._on_terminal_change)
 
         self._texts_btn = ttk.Button(top_bar, text="Texts ▶", command=self._toggle_text_panel)
         self._texts_btn.pack(side="right", padx=(0, 4))
@@ -243,6 +259,11 @@ class MainWindow:
         editor = self._editor_display.get(display, "cursor")
         ProjectService.set_editor(editor)
         self._sub_panel.refresh_editor()
+
+    def _on_terminal_change(self, event=None):
+        terminal = self._terminal_reverse.get(self._terminal_var.get(), "windows_terminal")
+        ProjectService.set_terminal(terminal)
+        self._sub_panel.refresh_terminal()
 
     def _on_sub_project_opened(self, project: Project) -> None:
         self._project_service.increment_open_count(project.id)

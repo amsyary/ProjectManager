@@ -7,6 +7,7 @@ from typing import Callable
 from models.project import Project, SubProject, ProjectType
 from services.project_service import ProjectService
 from services.editor_launcher import EditorLauncher
+from services.terminal_launcher import TerminalLauncher, TERMINALS
 from ui.icon_loader import load_icon, load_type_icon
 from ui.theme import ThemeManager
 
@@ -81,6 +82,7 @@ class SubProjectPanel(ttk.Frame):
         super().__init__(parent, **kwargs)
         self._icons_dir = ProjectService.icons_dir()
         self._editor = EditorLauncher(ProjectService.get_editor())
+        self._terminal = TerminalLauncher(ProjectService.get_terminal())
         self._project: Project | None = None
         self._on_sub_project_opened = on_sub_project_opened
         self._on_edit_project = on_edit_project
@@ -150,6 +152,12 @@ class SubProjectPanel(ttk.Frame):
             btn_bar, text="Project Folder", command=open_project_folder
         ).pack(side="left", padx=(0, 8))
 
+        if has_main_folder:
+            ttk.Button(
+                btn_bar, text="Terminal",
+                command=lambda: self._open_terminal(project.main_project_folder),
+            ).pack(side="left", padx=(0, 8))
+
         def edit_project():
             if self._on_edit_project:
                 self._on_edit_project(project)
@@ -161,7 +169,7 @@ class SubProjectPanel(ttk.Frame):
         if has_sub_projects:
             def open_all():
                 for sp in project.sub_projects:
-                    self._editor.open(sp.directory, sp.type)
+                    self._open_sub_project(sp)
                     if self._on_sub_project_opened:
                         self._on_sub_project_opened(project)
 
@@ -192,17 +200,74 @@ class SubProjectPanel(ttk.Frame):
             display_text = display_text[: MAX_DIR_DISPLAY - 3] + "..."
 
         def open_cmd():
-            self._editor.open(sp.directory, sp.type)
+            self._open_sub_project(sp)
             if self._on_sub_project_opened:
                 self._on_sub_project_opened(project)
 
         open_btn = ttk.Button(row, text="Open", command=open_cmd, width=8)
         open_btn.pack(side="right")
 
+        if sp.type != ProjectType.LINK:
+            if len(sp.commands) == 1:
+                cmd = sp.commands[0]
+                run_btn = ttk.Button(
+                    row, text="Run", width=6,
+                    command=lambda: self._open_terminal(sp.directory, cmd.command),
+                )
+                run_btn.pack(side="right", padx=(0, 4))
+                _create_tooltip(run_btn, f"Run in terminal: {cmd.command}")
+            elif sp.commands:
+                run_btn = ttk.Button(row, text="Run ▾", width=6)
+                run_btn.config(command=lambda: self._show_run_menu(run_btn, sp))
+                run_btn.pack(side="right", padx=(0, 4))
+            ttk.Button(
+                row, text="Terminal", width=8,
+                command=lambda: self._open_terminal(sp.directory),
+            ).pack(side="right", padx=(0, 4))
+
         name_label = ttk.Label(row, text=display_text)
         name_label.pack(side="left", padx=(0, 8))
         _create_tooltip(name_label, sp.directory)
 
+    def _show_run_menu(self, button: ttk.Button, sp: SubProject) -> None:
+        """Drop-down under the Run button to pick which command to run."""
+        menu = tk.Menu(self, tearoff=0)
+        for c in sp.commands:
+            label = c.display_name()
+            if c.name and c.name.strip():
+                label = f"{label}   ({c.command})"
+            menu.add_command(
+                label=label,
+                command=lambda c=c: self._open_terminal(sp.directory, c.command),
+            )
+        menu.add_separator()
+        menu.add_command(
+            label="Run all",
+            command=lambda: [self._open_terminal(sp.directory, c.command) for c in sp.commands],
+        )
+        menu.tk_popup(button.winfo_rootx(), button.winfo_rooty() + button.winfo_height())
+
+    def _open_sub_project(self, sp: SubProject) -> None:
+        """Open in the editor/app, and start any commands marked Run when opened."""
+        self._editor.open(sp.directory, sp.type)
+        if sp.type != ProjectType.LINK:
+            for c in sp.commands:
+                if c.run_on_open:
+                    self._open_terminal(sp.directory, c.command)
+
+    def _open_terminal(self, path: str, command: str | None = None) -> None:
+        """Open path in the chosen terminal (running command if given); show an error on failure."""
+        if not self._terminal.open(path, command):
+            messagebox.showerror(
+                "Terminal",
+                f"Could not open {TERMINALS[self._terminal.terminal]} in:\n{path}\n\n"
+                "Check that the folder exists and the terminal is installed.",
+            )
+
     def refresh_editor(self) -> None:
         """Refresh editor preference (e.g. after user changes it)."""
         self._editor = EditorLauncher(ProjectService.get_editor())
+
+    def refresh_terminal(self) -> None:
+        """Refresh terminal preference (e.g. after user changes it)."""
+        self._terminal = TerminalLauncher(ProjectService.get_terminal())
