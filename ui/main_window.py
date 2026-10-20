@@ -10,6 +10,7 @@ from ui.project_card import ProjectCard
 from ui.add_edit_dialog import AddEditDialog
 from ui.sub_project_panel import SubProjectPanel
 from ui.text_panel import TextPanel
+from ui.scrcpy_button import ScrcpyButton
 from ui.theme import ThemeManager
 
 
@@ -81,6 +82,8 @@ class MainWindow:
         _theme_label = "Light Mode" if ThemeManager().is_dark else "Night Mode"
         self._theme_btn = ttk.Button(top_bar, text=_theme_label, command=self._toggle_theme)
         self._theme_btn.pack(side="right", padx=(0, 8))
+
+        ScrcpyButton(top_bar).pack(side="right", padx=(0, 8))
 
         ttk.Separator(self.root, orient="horizontal").pack(fill="x")
 

@@ -17,6 +17,7 @@ Project Manager helps developers who work with many projects—especially those 
 - **Export/Import** – Backup and restore your project list as JSON
 - **Data File** – Add any file (.txt, .env, .json, .md, ...) that opens in Notepad
 - **Terminal** – Open a sub-project (or the main project folder) in Windows Terminal, PowerShell, PowerShell 7, Command Prompt, or Git Bash
+- **scrcpy** – Mirror a connected Android device or emulator: click "scrcpy" in the top bar and pick a device, or "Run on all". scrcpy runs without a console window and exits when you close its window or the device disconnects (needs `scrcpy` and `adb` on PATH)
 - **Commands** – Give a sub-project one or more terminal commands (e.g. `npm run dev`, `npm run build`) via its "+ Commands" button. Click "Run" to start one in the sub-project folder (with several, pick from the menu or "Run all"); tick "Run when opened" to start a command automatically with "Open" / "Open All"
 
 ## Requirements
