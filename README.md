@@ -1,29 +1,49 @@
 # Project Manager
 
-A desktop application to manage and quickly open your projects in Cursor or VS Code. Organize multiple projects with sub-projects, open them individually or all at once, and keep your most-used projects at the top.
+A Windows desktop launcher for developers who juggle many projects. A project is a bundle of folders (a Flutter app, an admin dashboard, cloud functions, docs, loose files and links), and Project Manager opens any of them in your editor, terminal, browser or Flutter run console in one click.
+
+Built with Python and PySide6 (Qt 6).
+
+![Project Manager, dark theme](docs/screenshots/main-dark.png)
 
 ## Purpose
 
-Project Manager helps developers who work with many projects—especially those with multiple sub-projects (e.g., Flutter app + admin dashboard + cloud functions). Instead of navigating folders or remembering paths, you open the app, click a project, and open what you need in Cursor or VS Code with one click.
+Instead of navigating folders or remembering paths, open the app, type a few letters of the project name, and launch what you need: Cursor, VS Code or Antigravity, a terminal in your preferred shell, a saved command, a VS Code task, a launch configuration, or a full Flutter run with hot reload.
 
 ## Features
 
-- **Grid view** – See all projects at a glance with optional custom icons
-- **Sub-projects** – Each project can have multiple directories (e.g., Flutter, Admin Dashboard, Cloud Function, Web, Documentation)
-- **Quick open** – Open sub-projects in Cursor or VS Code; open the main project folder in Windows Explorer
-- **Project types** – Categorize sub-projects: Flutter, Admin Dashboard, Cloud Function, Web Version, Documentation, General, or Data File
-- **Most-used sorting** – Projects you open most often move to the top
-- **Search** – Filter projects by name
-- **Export/Import** – Backup and restore your project list as JSON
-- **Data File** – Add any file (.txt, .env, .json, .md, ...) that opens in Notepad
-- **Terminal** – Open a sub-project (or the main project folder) in Windows Terminal, PowerShell, PowerShell 7, Command Prompt, or Git Bash
-- **scrcpy** – Mirror a connected Android device or emulator: click "scrcpy" in the top bar and pick a device, or "Run on all". scrcpy runs without a console window and exits when you close its window or the device disconnects (needs `scrcpy` and `adb` on PATH)
-- **Commands** – Give a sub-project one or more terminal commands (e.g. `npm run dev`, `npm run build`) via its "+ Commands" button. Click "Run" to start one in the sub-project folder (with several, pick from the menu or "Run all"); tick "Run when opened" to start a command automatically with "Open" / "Open All"
+- **Projects as drawers** – The left rail lists your projects, most-opened first. The open project shows a header with its tools and one slot per folder, and each folder only shows the actions it can actually perform
+- **Folder types** – Flutter, Admin Dashboard, Cloud Function, Web Version, Documentation, General, Data File (opens in Notepad), Execute / Open file (system default app) and Link (browser)
+- **Quick open** – Open a folder in Cursor, VS Code or Antigravity, or "Open all" for the whole project. The main project folder opens in Explorer. Missing folders are flagged in red
+- **Search** – Start typing anywhere in the project list; the first match opens straight away
+- **Terminal** – Open any folder (or the main project folder) in Windows Terminal, PowerShell, PowerShell 7, Command Prompt or Git Bash
+- **Commands** – Save terminal commands per folder (e.g. `npm run dev`, `npm run build`). Run one, pick from the Run menu, "Run all", or tick "Run when opened" to start it with Open / Open all
+- **VS Code tasks** – Folders with a `.vscode/tasks.json` get a Tasks menu. Supports shell/process, npm and typescript tasks, `dependsOn` (incl. `sequence`), `${workspaceFolder}`/`${env:...}` and `${input:...}` prompts (promptString and pickString). Tasks run in the shell your editor's terminal uses, like VS Code
+- **Launch / Flutter run** – Folders with a `.vscode/launch.json` or a Flutter `pubspec.yaml` get a Launch menu. Node, Python and plain Dart configurations run in a terminal (a `preLaunchTask` runs first). Flutter configurations open a run window with device, mode (debug / profile / release), target, flavor (auto-detected from Gradle) and extra args; launch.json fills these in (`program`, `flutterMode`, `deviceId`, `toolArgs`, `args`, `env`, `cwd`). While the app runs you get **Hot reload** (Ctrl+R), **Hot restart** (Ctrl+Shift+R), nine service-extension toggles (debug paint, repaint rainbow, baselines, performance overlay, widget inspector, invert oversized images, slow animations, dark mode, iOS look) and the live `flutter run` log. The window remembers each folder's settings
+- **Start** – Flutter folders get a Start button that runs with the saved device and settings in one click. While the app builds or runs, the button shows its state and timer ("Building 0:42", "Running") and the project's drawer gets a yellow dot; click it to bring the run window forward
+- **scrcpy** – Mirror a connected Android device or emulator from the top bar, or "Run on all". scrcpy runs without a console window; the button shows how many devices are mirroring (needs `scrcpy` and `adb` on PATH)
+- **Snippets** – A side panel of saved text (keys, commands, anything you paste often) with one-click Copy
+- **Dark and light themes** – Toggle in the top bar; the choice is saved and the Windows title bar follows it
+- **Export / Import** – Back up your project list as JSON; import by merging or overwriting
+
+![Project Manager, light theme](docs/screenshots/main-light.png)
+
+![Flutter run window](docs/screenshots/flutter-run.png)
+
+## Keyboard
+
+- Type anywhere in the project list, or press Ctrl+F, to search; Up/Down move through projects
+- Enter on a project focuses its first tool (Open all); Enter again launches it. Ctrl+Enter opens all folders directly
+- Double-click a folder row to open it
+- Ctrl+N adds a project, Ctrl+E edits it, Delete removes it (asks first), F5 re-reads tasks/launch files
+- In dialogs, Enter (or Ctrl+S) saves and Esc cancels
+- In the Flutter window: Ctrl+R hot reload, Ctrl+Shift+R hot restart
 
 ## Requirements
 
-- Python 3.10+
-- Pillow (for PNG/JPG icons)
+- Windows 10 or 11
+- Python 3.10+ (this machine uses `py`, Python 3.12)
+- PySide6
 
 ## Installation
 
@@ -42,40 +62,44 @@ py main.py
 
 ```bash
 py -m pip install pyinstaller
-py -m PyInstaller --onefile --windowed --name ProjectManager --add-data config;config --add-data data;data --add-data assets;assets main.py
+py -m PyInstaller --clean --noconfirm ProjectManager.spec
 ```
 
-The executable will be in `dist/ProjectManager.exe`.
+The executable will be in `dist/ProjectManager.exe`. The exe keeps its own `data/` and `config/` folders next to it, separate from the ones in the repository.
 
 Or use the VS Code task: **Terminal → Run Task → Build: Windows executable**
 
 ## Usage
 
-1. **Add a project** – Click "+ Add Project", enter a name, optionally set an icon and main project folder, then add sub-projects (directory + type).
-2. **Open projects** – Click a project to see its sub-projects. Use "Project Folder" to open the main folder in Explorer, or "Open All" / "Open" to open sub-projects in Cursor or VS Code.
-3. **Editor choice** – Use the dropdown at the top to switch between Cursor and VS Code. Your choice is saved.
-4. **Terminal choice** – Use the "Terminal" dropdown at the top to pick which terminal "Terminal" and "Run" open. Your choice is saved.
-5. **Edit/Delete** – Right-click a project card for Edit or Delete.
+1. **Add a project** – Click "Add project" (or Ctrl+N), enter a name, optionally pick an icon (an image file or one of the default icons) and a main folder, then add its folders with a type each.
+2. **Open things** – Pick a project on the left. Use "Open all", or the Open / Terminal / Run / Tasks / Launch / Start tools on each folder.
+3. **Editor and terminal** – Choose them in the top bar. Your choices are saved.
+4. **Edit or delete** – Use the pencil or "…" on the project header, double-click or right-click a project in the list, or Ctrl+E / Delete.
 
 ## Project Structure
 
 ```
 ProjectManager/
 ├── main.py              # Entry point
-├── config/              # Settings (editor preference)
-├── data/                # Projects (projects.json)
-├── assets/icons/        # Type icons (flutter.png, etc.)
+├── config/              # Settings (editor, terminal, theme, Flutter run settings)
+├── data/                # Projects and snippets (projects.json)
+├── assets/icons/        # Folder type icons and default project icons
 ├── models/              # Data models
-├── services/            # Project & editor logic
-└── ui/                  # Tkinter UI
+├── services/            # Launchers, VS Code tasks/launch parsing, Flutter runner, scrcpy
+├── ui/                  # PySide6 UI (theme.py holds the design tokens)
+├── docs/screenshots/    # README screenshots
+├── PRODUCT.md           # Product context
+└── DESIGN.md            # Design system
 ```
 
 ## Icons
 
-Place custom icons in `assets/icons/` with these names:
+Folder type icons live in `assets/icons/` with these names:
 
-- `flutter.png`, `admin_dashboard.png`, `cloud_function.png`
-- `web_version.png`, `documentation.png`, `general.png`, `data_txt.png`
+- `flutter.png`, `admin_dashboard.png`, `cloud_function.png`, `web_version.png`
+- `documentation.png`, `general.png`, `data_txt.png`, `execute.png`, `link.png`
+
+Default project icons live in `assets/icons/default_icon/`.
 
 ## Author
 

@@ -7,10 +7,10 @@ a = Analysis(
     binaries=[],
     datas=[('config', 'config'), ('data', 'data'), ('assets', 'assets')],
     hiddenimports=[],
-    hookspath=['hooks'],
+    hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['tkinter', '_tkinter', 'PIL'],
     noarchive=False,
     optimize=0,
 )

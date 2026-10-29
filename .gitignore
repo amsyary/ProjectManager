@@ -13,3 +13,8 @@ build/
 *.log
 .DS_Store
 Thumbs.db
+
+# Impeccable working files (review captures, question pages)
+.impeccable/review/
+.impeccable/questions/
+.impeccable/decision/

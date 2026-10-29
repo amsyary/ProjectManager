@@ -126,6 +126,9 @@ class ScrcpyLauncher:
     def has_sessions(self) -> bool:
         return bool(self._sessions)
 
+    def session_count(self) -> int:
+        return len(self._sessions)
+
     def pop_finished(self) -> list[ScrcpySession]:
         """Remove and return sessions whose scrcpy window has closed (or device disconnected)."""
         finished = [s for s in self._sessions.values() if s.process.poll() is not None]

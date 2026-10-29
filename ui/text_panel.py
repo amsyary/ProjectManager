@@ -1,203 +1,177 @@
-"""Panel for managing and copying saved text snippets."""
+"""Side panel of saved text snippets: copy with one click, add, edit, delete."""
 
-import tkinter as tk
-from tkinter import ttk, messagebox
+from __future__ import annotations
+
 import uuid
+from typing import Optional
+
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
+from PySide6.QtWidgets import (
+    QDialog, QHBoxLayout, QLabel, QPlainTextEdit, QScrollArea, QVBoxLayout, QWidget,
+)
 
 from models.project import TextSnippet
 from services.project_service import ProjectService
-from ui.theme import ThemeManager
+from ui import dialogs
+from ui.theme import SIZE_META, apply_title_bar, label_font, mono_font
+from ui.widgets import FoamPanel, ToolSlot
+
+PREVIEW_LINES = 6
 
 
-class TextPanel(ttk.Frame):
+def _preview(text: str) -> str:
+    lines = text.splitlines() or [""]
+    shown = [line if len(line) <= 120 else line[:119] + "…" for line in lines[:PREVIEW_LINES]]
+    if len(lines) > PREVIEW_LINES:
+        shown.append(f"… {len(lines) - PREVIEW_LINES} more lines")
+    return "\n".join(shown)
+
+
+class _SnippetCard(FoamPanel):
+    def __init__(self, panel: "TextPanel", snippet: TextSnippet):
+        super().__init__(radius=10)
+        self.snippet = snippet
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 10, 14)
+        layout.setSpacing(8)
+        text = QLabel(_preview(snippet.content))
+        text.setFont(mono_font(SIZE_META))
+        text.setWordWrap(True)
+        text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        text.setToolTip(snippet.content[:1500])
+        layout.addWidget(text)
+
+        bar = QHBoxLayout()
+        bar.setSpacing(2)
+        self.copy = ToolSlot("Copy", "copy", compact=True)
+        self.copy.clicked.connect(self._copy)
+        edit = ToolSlot("", "edit", compact=True, variant="quiet", tooltip="Edit snippet")
+        edit.clicked.connect(lambda: panel.edit_snippet(snippet))
+        delete = ToolSlot("", "trash", compact=True, variant="danger", tooltip="Delete snippet")
+        delete.clicked.connect(lambda: panel.delete_snippet(snippet))
+        bar.addWidget(self.copy)
+        bar.addStretch()
+        bar.addWidget(edit)
+        bar.addWidget(delete)
+        layout.addLayout(bar)
+
+    def _copy(self) -> None:
+        QGuiApplication.clipboard().setText(self.snippet.content)
+        self.copy.setText("Copied")
+        self.copy.set_icon_name("check")
+        self.copy.set_active(True)
+        QTimer.singleShot(1300, self._reset_copy)
+
+    def _reset_copy(self) -> None:
+        try:
+            self.copy.setText("Copy")
+            self.copy.set_icon_name("copy")
+            self.copy.set_active(False)
+        except RuntimeError:
+            pass  # Card was rebuilt meanwhile
+
+
+class TextPanel(QWidget):
     """Right-side panel for text snippet management."""
 
-    def __init__(self, parent, project_service: ProjectService, **kwargs):
-        super().__init__(parent, **kwargs)
-        self._service = project_service
-        self._build_ui()
+    def __init__(self, service: ProjectService, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._service = service
+        self.setObjectName("Rail")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setMinimumWidth(260)
 
-    def _build_ui(self):
-        header = ttk.Frame(self)
-        header.pack(fill="x", padx=6, pady=(6, 4))
-        ttk.Label(header, text="Text Snippets", font=("", 10, "bold")).pack(side="left")
-        ttk.Button(header, text="+ Add", command=self._on_add).pack(side="right")
+        root = QVBoxLayout(self)
+        root.setContentsMargins(14, 14, 10, 10)
+        root.setSpacing(10)
+        head = QHBoxLayout()
+        title = QLabel("Snippets")
+        title.setFont(label_font(semibold=True))
+        head.addWidget(title)
+        self._count = QLabel("")
+        self._count.setProperty("role", "dim")
+        head.addWidget(self._count)
+        head.addStretch()
+        add = ToolSlot("Add", "plus", compact=True, tooltip="Add a text snippet")
+        add.clicked.connect(lambda: self.edit_snippet(None))
+        head.addWidget(add)
+        root.addLayout(head)
 
-        ttk.Separator(self, orient="horizontal").pack(fill="x")
-
-        canvas_frame = ttk.Frame(self)
-        canvas_frame.pack(fill="both", expand=True)
-
-        self._scrollbar = ttk.Scrollbar(canvas_frame)
-        self._scrollbar.pack(side="right", fill="y")
-        self._canvas = tk.Canvas(canvas_frame, highlightthickness=0, yscrollcommand=self._scrollbar.set)
-        self._canvas.pack(side="left", fill="both", expand=True)
-        self._scrollbar.configure(command=self._canvas.yview)
-        c = ThemeManager().colors
-        self._canvas.configure(bg=c["bg"], highlightbackground=c["bg"])
-
-        self._inner = ttk.Frame(self._canvas)
-        self._canvas_window = self._canvas.create_window((0, 0), window=self._inner, anchor="nw")
-
-        self._inner.bind(
-            "<Configure>",
-            lambda e: self._canvas.configure(scrollregion=self._canvas.bbox("all")),
-        )
-        self._canvas.bind(
-            "<Configure>",
-            lambda e: self._canvas.itemconfig(self._canvas_window, width=e.width),
-        )
-        self._canvas.bind("<MouseWheel>", self._on_mousewheel)
-        self._canvas.bind("<Button-4>", self._on_mousewheel)
-        self._canvas.bind("<Button-5>", self._on_mousewheel)
-
+        self._list = QVBoxLayout()
+        self._list.setContentsMargins(0, 0, 4, 0)
+        self._list.setSpacing(4)
+        holder = QWidget()
+        holder.setLayout(self._list)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setWidget(holder)
+        root.addWidget(scroll, 1)
         self.refresh()
-
-    def _on_mousewheel(self, event: tk.Event) -> None:
-        num = getattr(event, "num", None)
-        if num == 4:
-            self._canvas.yview_scroll(-1, "units")
-        elif num == 5:
-            self._canvas.yview_scroll(1, "units")
-        else:
-            delta = getattr(event, "delta", 0)
-            if delta:
-                self._canvas.yview_scroll(int(-1 * (delta / 120)), "units")
-
-    def _bind_mousewheel(self, widget: tk.Widget) -> None:
-        widget.bind("<MouseWheel>", self._on_mousewheel)
-        widget.bind("<Button-4>", self._on_mousewheel)
-        widget.bind("<Button-5>", self._on_mousewheel)
-        for child in widget.winfo_children():
-            self._bind_mousewheel(child)
 
     def refresh(self) -> None:
-        for w in self._inner.winfo_children():
-            w.destroy()
-
+        while self._list.count():
+            item = self._list.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
         snippets = self._service.get_snippets()
+        self._count.setText(str(len(snippets)) if snippets else "")
         if not snippets:
-            ttk.Label(
-                self._inner,
-                text="No text snippets yet.\nClick '+ Add' to create one.",
-                justify="center",
-                foreground="gray",
-            ).pack(pady=24)
-            return
-
+            empty = QLabel("No snippets yet.\nKeep keys, commands or text you paste often here.")
+            empty.setProperty("role", "dim")
+            empty.setWordWrap(True)
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._list.addSpacing(24)
+            self._list.addWidget(empty)
         for snippet in snippets:
-            self._add_snippet_card(snippet)
+            self._list.addWidget(_SnippetCard(self, snippet))
+        self._list.addStretch()
 
-    def _add_snippet_card(self, snippet: TextSnippet) -> None:
-        outer = ttk.Frame(self._inner, relief="solid", borderwidth=1)
-        outer.pack(fill="x", padx=8, pady=4)
+    def delete_snippet(self, snippet: TextSnippet) -> None:
+        if dialogs.confirm(self.window(), "Delete snippet", "Delete this text snippet?", "Delete", danger=True):
+            self._service.delete_snippet(snippet.id)
+            self.refresh()
 
-        lines = snippet.content.count("\n") + 1
-        height = min(max(lines, 2), 12)
-
-        c = ThemeManager().colors
-        txt = tk.Text(
-            outer,
-            wrap="word",
-            height=height,
-            relief="flat",
-            borderwidth=0,
-            padx=6,
-            pady=4,
-            cursor="arrow",
-            state="normal",
-            bg=c["bg"],
-            fg=c["fg"],
-            insertbackground=c["fg"],
-            selectbackground=c["select_bg"],
-            selectforeground=c["select_fg"],
-        )
-        txt.insert("1.0", snippet.content)
-        txt.config(state="disabled")
-        txt.pack(fill="x", padx=2, pady=(4, 0))
-
-        btn_bar = ttk.Frame(outer)
-        btn_bar.pack(fill="x", padx=6, pady=(2, 6))
-
-        def on_copy(s=snippet):
-            self.clipboard_clear()
-            self.clipboard_append(s.content)
-
-        def on_edit(s=snippet):
-            self._open_edit_dialog(s)
-
-        def on_delete(s=snippet):
-            if messagebox.askyesno(
-                "Delete Snippet",
-                "Delete this text snippet?",
-                parent=self.winfo_toplevel(),
-            ):
-                self._service.delete_snippet(s.id)
-                self.refresh()
-
-        ttk.Button(btn_bar, text="Copy", command=on_copy, width=6).pack(side="right", padx=(4, 0))
-        ttk.Button(btn_bar, text="Edit", command=on_edit, width=6).pack(side="right", padx=(4, 0))
-        ttk.Button(btn_bar, text="Del", command=on_delete, width=4).pack(side="right")
-
-        # Bind scroll on all card children so wheel works over cards too
-        self._bind_mousewheel(outer)
-
-    def apply_theme(self) -> None:
-        c = ThemeManager().colors
-        self._canvas.configure(bg=c["bg"], highlightbackground=c["bg"])
-        self.refresh()
-
-    def _on_add(self):
-        self._open_edit_dialog(None)
-
-    def _open_edit_dialog(self, snippet: TextSnippet | None) -> None:
-        root = self.winfo_toplevel()
-        dialog = tk.Toplevel(root)
-        dialog.title("Add Text Snippet" if snippet is None else "Edit Text Snippet")
-        dialog.transient(root)
-        dialog.grab_set()
-        dialog.resizable(True, True)
-        dialog.geometry("480x300")
-        dialog.minsize(320, 200)
-        c = ThemeManager().colors
-        dialog.configure(bg=c["bg"])
-
-        btn_bar = ttk.Frame(dialog)
-        btn_bar.pack(side="bottom", fill="x", padx=12, pady=12)
-
-        ttk.Label(dialog, text="Text content:").pack(padx=12, pady=(12, 4), anchor="w")
-
-        txt_frame = ttk.Frame(dialog)
-        txt_frame.pack(fill="both", expand=True, padx=12, pady=(0, 4))
-
-        sb = ttk.Scrollbar(txt_frame)
-        sb.pack(side="right", fill="y")
-        txt = tk.Text(
-            txt_frame, wrap="word", yscrollcommand=sb.set,
-            bg=c["bg_input"], fg=c["fg"],
-            insertbackground=c["fg"],
-            selectbackground=c["select_bg"],
-            selectforeground=c["select_fg"],
-        )
-        sb.config(command=txt.yview)
-        txt.pack(fill="both", expand=True)
-        if snippet:
-            txt.insert("1.0", snippet.content)
-        txt.focus_set()
+    def edit_snippet(self, snippet: Optional[TextSnippet]) -> None:
+        dlg = QDialog(self.window())
+        dlg.setWindowTitle("Add snippet" if snippet is None else "Edit snippet")
+        dlg.resize(560, 360)
+        dlg.setMinimumSize(360, 220)
+        root = QVBoxLayout(dlg)
+        root.setContentsMargins(20, 18, 20, 18)
+        root.setSpacing(10)
+        editor = QPlainTextEdit(snippet.content if snippet else "")
+        editor.setProperty("mono", True)
+        editor.setPlaceholderText("Text to keep at hand")
+        root.addWidget(editor, 1)
+        footer = QHBoxLayout()
+        hint = QLabel("Ctrl+S saves")
+        hint.setProperty("role", "dim")
+        footer.addWidget(hint)
+        footer.addStretch()
+        cancel = ToolSlot("Cancel")
+        cancel.clicked.connect(dlg.reject)
+        save = ToolSlot("Save snippet", "check", variant="primary")
+        footer.addWidget(cancel)
+        footer.addWidget(save)
+        root.addLayout(footer)
 
         def on_save():
-            content = txt.get("1.0", "end-1c")
+            content = editor.toPlainText()
             if not content.strip():
-                messagebox.showwarning("Empty", "Text content cannot be empty.", parent=dialog)
+                dialogs.warn(dlg, "Empty snippet", "Type some text to save.")
                 return
             if snippet is None:
                 self._service.add_snippet(TextSnippet(id=str(uuid.uuid4()), content=content))
             else:
                 snippet.content = content
                 self._service.update_snippet(snippet)
+            dlg.accept()
             self.refresh()
-            dialog.destroy()
 
-        ttk.Button(btn_bar, text="Save", command=on_save).pack(side="right", padx=(8, 0))
-        ttk.Button(btn_bar, text="Cancel", command=dialog.destroy).pack(side="right")
-        dialog.bind("<Escape>", lambda _: dialog.destroy())
+        save.clicked.connect(on_save)
+        QShortcut(QKeySequence("Ctrl+S"), dlg, on_save)
+        editor.setFocus()
+        apply_title_bar(dlg)
+        dlg.exec()

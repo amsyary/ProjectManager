@@ -1,358 +1,410 @@
-"""Main application window with grid view and top bar."""
+"""Main window: the cabinet. Drawer fronts on the left, the open drawer beside them."""
 
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from __future__ import annotations
+
+from typing import Optional
+
+from PySide6.QtCore import QRectF, Qt, QTimer
+from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
+from PySide6.QtWidgets import (
+    QApplication, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QSizePolicy, QSplitter,
+    QVBoxLayout, QWidget,
+)
 
 from models.project import Project
 from services.project_service import ProjectService
 from services.terminal_launcher import TERMINALS
-from ui.project_card import ProjectCard
-from ui.add_edit_dialog import AddEditDialog
-from ui.sub_project_panel import SubProjectPanel
-from ui.text_panel import TextPanel
+from ui import dialogs, icons
+from ui.add_edit_dialog import ProjectDialog
+from ui.flutter_run_window import FlutterRunWindow
+from ui.icon_loader import clear_cache
+from ui.project_card import ProjectRail
 from ui.scrcpy_button import ScrcpyButton
-from ui.theme import ThemeManager
+from ui.sub_project_panel import EDITORS, SubProjectPanel
+from ui.text_panel import TextPanel
+from ui.theme import Theme, apply_title_bar, label_font, t
+from ui.widgets import Combo, Menu, SearchField, ToolSlot, paint_cut
 
 
-class MainWindow:
+def app_icon() -> QIcon:
+    """The app mark: a yellow drawer cut into charcoal foam."""
+    ico = QIcon()
+    for size in (16, 24, 32, 48, 64, 128, 256):
+        pm = QPixmap(size, size)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setBrush(QColor("#26292D"))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawRoundedRect(QRectF(0, 0, size, size), size * 0.22, size * 0.22)
+        inset = size * 0.16
+        p.drawPixmap(int(inset), int(inset), icons.pixmap("drawer", "#F2B705", int(size - 2 * inset), dpr=1.0))
+        p.end()
+        ico.addPixmap(pm)
+    return ico
+
+
+def _caps(text: str) -> QLabel:
+    label = QLabel(text.upper())
+    label.setProperty("role", "caps")
+    return label
+
+
+class MainWindow(QMainWindow):
     """Main application window."""
 
-    GRID_COLS = 4
-
     def __init__(self):
-        self.root = tk.Tk()
-        self.root.title("Project Manager")
-        self.root.geometry("950x600")
-        self.root.minsize(700, 400)
+        super().__init__()
+        self.setWindowTitle("Project Manager")
+        self.setWindowIcon(app_icon())
+        self.resize(1200, 760)
+        self.setMinimumSize(880, 540)
 
-        self._project_service = ProjectService()
-        self._selected_project: Project | None = None
-        self._card_widgets: list[ProjectCard] = []
-        self._texts_visible = False
+        self._service = ProjectService()
+        self._selected_id: Optional[str] = None
+        self._build()
+        self._shortcuts()
+        self._refresh_rail()
 
-        ThemeManager().init(self.root, dark=ProjectService.get_theme() == "dark")
-        self._build_ui()
-        self._apply_tk_theme()
-        self._refresh_grid()
+        self._run_timer = QTimer(self, interval=1000)
+        self._run_timer.timeout.connect(self._rail.refresh_running)
+        self._run_timer.start()
+        QApplication.instance().aboutToQuit.connect(FlutterRunWindow.shutdown_all)
 
-    def _build_ui(self):
-        self._build_menu()
+    # -- layout --
 
-        top_bar = ttk.Frame(self.root, padding=8)
-        top_bar.pack(fill="x")
+    def _build(self) -> None:
+        cabinet = QWidget()
+        cabinet.setObjectName("Cabinet")
+        root = QVBoxLayout(cabinet)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(self._top_bar())
 
-        ttk.Label(top_bar, text="Editor:").pack(side="left", padx=(0, 8))
-        saved = ProjectService.get_editor()
-        self._editor_var = tk.StringVar(value=saved)
-        self._editor_display = {
-            "Cursor": "cursor",
-            "VS Code": "code",
-            "Antigravity": "antigravity",
-        }
-        self._editor_reverse = {v: k for k, v in self._editor_display.items()}
-        editor_combo = ttk.Combobox(
-            top_bar,
-            textvariable=self._editor_var,
-            values=list(self._editor_display.keys()),
-            state="readonly",
-            width=14,
-        )
-        self._editor_var.set(self._editor_reverse.get(saved, "Cursor"))
-        editor_combo.pack(side="left", padx=(0, 16))
-        editor_combo.bind("<<ComboboxSelected>>", self._on_editor_change)
+        self._splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._splitter.setHandleWidth(1)
+        self._splitter.setChildrenCollapsible(False)
 
-        ttk.Label(top_bar, text="Terminal:").pack(side="left", padx=(0, 8))
-        self._terminal_reverse = {v: k for k, v in TERMINALS.items()}
-        self._terminal_var = tk.StringVar(
-            value=TERMINALS.get(ProjectService.get_terminal(), TERMINALS["windows_terminal"])
-        )
-        terminal_combo = ttk.Combobox(
-            top_bar,
-            textvariable=self._terminal_var,
-            values=list(TERMINALS.values()),
-            state="readonly",
-            width=18,
-        )
-        terminal_combo.pack(side="left", padx=(0, 16))
-        terminal_combo.bind("<<ComboboxSelected>>", self._on_terminal_change)
+        rail = QWidget()
+        rail.setObjectName("Rail")
+        rail.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        rail.setMinimumWidth(250)
+        rail_layout = QVBoxLayout(rail)
+        rail_layout.setContentsMargins(0, 12, 0, 12)
+        rail_layout.setSpacing(8)
+        self._search = SearchField("Search projects   Ctrl+F")
+        self._search.textChanged.connect(lambda _: self._refresh_rail())
+        self._search.navigate.connect(lambda d: self._rail.step(d))
+        self._search.accepted.connect(self._search_accepted)
+        search_row = QHBoxLayout()
+        search_row.setContentsMargins(12, 0, 12, 0)
+        search_row.addWidget(self._search)
+        rail_layout.addLayout(search_row)
 
-        self._texts_btn = ttk.Button(top_bar, text="Texts ▶", command=self._toggle_text_panel)
-        self._texts_btn.pack(side="right", padx=(0, 4))
+        self._rail = ProjectRail()
+        self._rail.set_running_check(self._project_running)
+        self._rail.project_selected.connect(self._on_project_selected)
+        self._rail.edit_requested.connect(self._on_edit_project)
+        self._rail.delete_requested.connect(self._on_delete_project)
+        self._rail.open_all_requested.connect(lambda p: self._drawer.open_all(p))
+        self._rail.typed.connect(self._type_ahead)
+        self._rail.entered.connect(self._drawer_focus)
+        rail_layout.addWidget(self._rail, 1)
 
-        _theme_label = "Light Mode" if ThemeManager().is_dark else "Night Mode"
-        self._theme_btn = ttk.Button(top_bar, text=_theme_label, command=self._toggle_theme)
-        self._theme_btn.pack(side="right", padx=(0, 8))
+        add = ToolSlot("Add project", "plus", tooltip="Add a project (Ctrl+N)")
+        add.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        add.clicked.connect(self._on_add_project)
+        add_row = QHBoxLayout()
+        add_row.setContentsMargins(12, 0, 12, 0)
+        add_row.addWidget(add)
+        rail_layout.addLayout(add_row)
 
-        ScrcpyButton(top_bar).pack(side="right", padx=(0, 8))
-
-        ttk.Separator(self.root, orient="horizontal").pack(fill="x")
-
-        self._content = ttk.PanedWindow(self.root, orient="horizontal")
-        self._content.pack(fill="both", expand=True, padx=8, pady=8)
-
-        self._left_frame = ttk.Frame(self._content)
-        self._content.add(self._left_frame, weight=2)
-        left_frame = self._left_frame
-
-        grid_header = ttk.Frame(left_frame)
-        grid_header.pack(fill="x")
-        ttk.Label(grid_header, text="Projects", font=("", 12, "bold")).pack(side="left")
-        ttk.Button(
-            grid_header, text="+ Add Project", command=self._on_add_project
-        ).pack(side="right", padx=4)
-
-        self._search_var = tk.StringVar()
-        self._search_var.trace_add("write", lambda *_: self._refresh_grid())
-        search_frame = ttk.Frame(left_frame)
-        search_frame.pack(fill="x", pady=(4, 0))
-        ttk.Label(search_frame, text="Search:").pack(side="left", padx=(0, 4))
-        search_entry = ttk.Entry(
-            search_frame, textvariable=self._search_var, width=30
-        )
-        search_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
-
-        canvas_frame = ttk.Frame(left_frame)
-        canvas_frame.pack(fill="both", expand=True)
-
-        self._canvas = tk.Canvas(canvas_frame)
-        scrollbar = ttk.Scrollbar(canvas_frame)
-
-        scrollbar.pack(side="right", fill="y")
-        self._canvas.pack(side="left", fill="both", expand=True)
-        self._canvas.configure(yscrollcommand=scrollbar.set)
-        scrollbar.configure(command=self._canvas.yview)
-
-        self._grid_inner = ttk.Frame(self._canvas)
-        self._canvas_window = self._canvas.create_window(
-            (0, 0), window=self._grid_inner, anchor="nw"
-        )
-
-        self._grid_inner.bind(
-            "<Configure>",
-            lambda e: self._canvas.configure(scrollregion=self._canvas.bbox("all")),
-        )
-        self._canvas.bind(
-            "<Configure>",
-            lambda e: self._canvas.itemconfig(
-                self._canvas_window, width=e.width
-            ),
-        )
-        # Wheel goes to the widget under the cursor (cards), not the canvas — bind the whole left column.
-        self._bind_wheel_scroll_tree(left_frame)
-        self._canvas.bind("<MouseWheel>", self._on_grid_mousewheel)
-        self._canvas.bind("<Button-4>", self._on_grid_mousewheel)
-        self._canvas.bind("<Button-5>", self._on_grid_mousewheel)
-
-        self._sub_panel = SubProjectPanel(
-            self._content,
+        self._drawer = SubProjectPanel(
             on_sub_project_opened=self._on_sub_project_opened,
             on_edit_project=self._on_edit_project,
+            on_delete_project=self._on_delete_project,
+            on_add_project=self._on_add_project,
         )
-        self._content.add(self._sub_panel, weight=1)
+        self._texts = TextPanel(self._service)
+        self._texts.hide()
 
-        self._text_panel = TextPanel(self._content, self._project_service)
+        self._splitter.addWidget(rail)
+        self._splitter.addWidget(self._drawer)
+        self._splitter.addWidget(self._texts)
+        self._splitter.setStretchFactor(0, 0)
+        self._splitter.setStretchFactor(1, 1)
+        self._splitter.setStretchFactor(2, 0)
+        self._splitter.setSizes([300, 900, 0])
+        root.addWidget(self._splitter, 1)
+        self.setCentralWidget(cabinet)
 
-    def _toggle_text_panel(self):
-        if self._texts_visible:
-            self._content.remove(self._text_panel)
-            self._texts_visible = False
-            self._texts_btn.config(text="Texts ▶")
-        else:
-            self._content.add(self._text_panel, weight=1)
-            self._texts_visible = True
-            self._texts_btn.config(text="Texts ◀")
-            self._text_panel.refresh()
-            current_w = self.root.winfo_width()
-            if current_w < 1200:
-                self.root.geometry(f"1300x{self.root.winfo_height()}")
+    def _top_bar(self) -> QWidget:
+        bar = QWidget()
+        bar.setObjectName("Rail")
+        bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(16, 8, 12, 8)
+        row.setSpacing(8)
 
-    def _build_menu(self):
-        menubar = tk.Menu(self.root)
-        self.root.config(menu=menubar)
+        self._mark = QLabel()
+        self._mark.setPixmap(icons.pixmap("drawer", t("yellow"), 20))
+        row.addWidget(self._mark)
+        self._title = QLabel("Project Manager")
+        self._title.setFont(label_font(semibold=True))
+        row.addWidget(self._title)
+        row.addStretch()
 
-        file_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="Export...", command=self._on_export)
-        file_menu.add_command(label="Import...", command=self._on_import)
+        self._editor_caps = _caps("Editor")
+        row.addWidget(self._editor_caps)
+        self._editor_box = Combo()
+        for key, name in EDITORS.items():
+            self._editor_box.addItem(name, key)
+        saved = ProjectService.get_editor()
+        self._editor_box.setCurrentIndex(max(0, self._editor_box.findData(saved)))
+        self._editor_box.setMinimumWidth(130)
+        self._editor_box.setToolTip("Editor that Open uses")
+        self._editor_box.currentIndexChanged.connect(self._on_editor_change)
+        row.addWidget(self._editor_box)
+        row.addSpacing(8)
 
-    def _on_export(self):
-        path = filedialog.asksaveasfilename(
-            title="Export projects",
-            defaultextension=".json",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-        )
-        if not path:
+        self._terminal_caps = _caps("Terminal")
+        row.addWidget(self._terminal_caps)
+        self._terminal_box = Combo()
+        for key, name in TERMINALS.items():
+            self._terminal_box.addItem(name, key)
+        self._terminal_box.setCurrentIndex(max(0, self._terminal_box.findData(ProjectService.get_terminal())))
+        self._terminal_box.setMinimumWidth(176)
+        self._terminal_box.setToolTip("Terminal that Terminal, Run, tasks and launch use")
+        self._terminal_box.currentIndexChanged.connect(self._on_terminal_change)
+        row.addWidget(self._terminal_box)
+        row.addSpacing(10)
+
+        row.addWidget(ScrcpyButton())
+        self._texts_btn = ToolSlot("Snippets", "note", compact=True, tooltip="Show saved text snippets")
+        self._texts_btn.setCheckable(True)
+        self._texts_btn.toggled.connect(self._toggle_text_panel)
+        row.addWidget(self._texts_btn)
+        self._theme_btn = ToolSlot("", "sun" if Theme.get().is_dark else "moon", compact=True, variant="quiet")
+        self._theme_btn.clicked.connect(self._toggle_theme)
+        self._update_theme_btn()
+        row.addWidget(self._theme_btn)
+        more = ToolSlot("", "more", compact=True, variant="quiet", tooltip="Export or import projects")
+        more.clicked.connect(lambda: self._file_menu(more))
+        row.addWidget(more)
+        return bar
+
+    def _shortcuts(self) -> None:
+        QShortcut(QKeySequence("Ctrl+F"), self, self._focus_search)
+        QShortcut(QKeySequence("Ctrl+N"), self, self._on_add_project)
+        QShortcut(QKeySequence("Ctrl+E"), self, lambda: self._with_current(self._on_edit_project))
+        QShortcut(QKeySequence("Ctrl+Return"), self, lambda: self._with_current(self._drawer.open_all))
+        QShortcut(QKeySequence("F5"), self, self._reload_drawer)
+
+    def showEvent(self, event) -> None:
+        apply_title_bar(self)
+        super().showEvent(event)
+        QTimer.singleShot(0, self._search.setFocus)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        roomy = self.width() >= 1080  # Labels give way before the controls do
+        for w in (self._title, self._editor_caps, self._terminal_caps):
+            w.setVisible(roomy)
+
+    # -- rail --
+
+    def _visible_projects(self) -> list[Project]:
+        projects = self._service.get_all()
+        query = self._search.text().strip().lower()
+        if query:
+            projects = [p for p in projects if query in p.name.lower()]
+        projects.sort(key=lambda p: p.open_count, reverse=True)
+        return projects
+
+    def _refresh_rail(self) -> None:
+        projects = self._visible_projects()
+        query = self._search.text().strip()
+        ids = [p.id for p in projects]
+        if query and projects and self._selected_id not in ids:
+            self._selected_id = projects[0].id  # Typing narrows straight to the best match
+        self._rail.set_projects(projects, self._selected_id)
+
+        if not self._service.get_all():
+            self._drawer.show_empty("no_projects")
+        elif not projects:
+            self._drawer.show_empty("no_match", query, on_clear=self._search.clear)
+        elif self._selected_id in ids:
+            selected = next(p for p in projects if p.id == self._selected_id)
+            if self._drawer.project is None or self._drawer.project.id != selected.id:
+                self._drawer.set_project(selected)
+        elif self._drawer.project is None or self._drawer.project.id not in ids:
+            self._drawer.show_empty("none")
+
+    def _on_project_selected(self, project: Optional[Project]) -> None:
+        if project is None:
             return
-        if self._project_service.export_to_file(path):
-            messagebox.showinfo("Export", "Projects exported successfully.")
-        else:
-            messagebox.showerror("Export", "Failed to export projects.")
+        same = self._drawer.project is not None and self._drawer.project.id == project.id
+        self._selected_id = project.id
+        if not same:
+            self._drawer.set_project(project)
 
-    def _on_import(self):
-        path = filedialog.askopenfilename(
-            title="Import projects",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-        )
-        if not path:
-            return
+    def _project_running(self, project: Project) -> bool:
+        folders = [project.main_project_folder] if project.main_project_folder else []
+        folders += [sp.directory for sp in project.sub_projects]
+        return any(FlutterRunWindow.session_state(f)[0] for f in folders)
 
-        projects = self._project_service.import_from_file(path)
-        if projects is None:
-            messagebox.showerror("Import", "Failed to load file. Invalid or corrupted.")
-            return
+    def _search_accepted(self) -> None:
+        if self._rail.count():
+            if self._rail.currentRow() < 0:
+                self._rail.setCurrentRow(0)
+            self._rail.setFocus()
 
-        current_count = len(self._project_service.get_all())
-        if current_count == 0:
-            self._project_service.replace_all(projects)
-            self._selected_project = None
-            self._sub_panel.set_project(None)
-            self._refresh_grid()
-            messagebox.showinfo("Import", f"Imported {len(projects)} project(s).")
-            return
+    def _drawer_focus(self) -> None:
+        self._drawer.focus_first_tool()
 
-        result = messagebox.askyesnocancel(
-            "Import",
-            f"Import {len(projects)} project(s).\n\n"
-            f"You have {current_count} current project(s).\n\n"
-            "Yes = Overwrite (replace all current projects)\n"
-            "No = Merge (add/update, keep existing)\n"
-            "Cancel = Abort",
-        )
-        if result is None:
-            return
+    def _focus_search(self) -> None:
+        self._search.setFocus()
+        self._search.selectAll()
 
-        if result:
-            if not messagebox.askyesno(
-                "Confirm Overwrite",
-                f"This will replace all {current_count} current project(s) with "
-                f"{len(projects)} imported project(s).\n\nContinue?",
-            ):
-                return
-            self._project_service.replace_all(projects)
-        else:
-            self._project_service.merge_projects(projects)
+    def _type_ahead(self, text: str) -> None:
+        self._search.setFocus()
+        self._search.insert(text)
 
-        self._selected_project = None
-        self._sub_panel.set_project(None)
-        self._refresh_grid()
-        messagebox.showinfo("Import", f"Imported {len(projects)} project(s).")
+    def _with_current(self, action) -> None:
+        project = self._drawer.project
+        if project is not None:
+            action(project)
 
-    def _on_grid_mousewheel(self, event: tk.Event) -> None:
-        """Scroll project grid; bound on canvas and recursively on grid widgets."""
-        num = getattr(event, "num", None)
-        if num == 4:
-            self._canvas.yview_scroll(-1, "units")
-        elif num == 5:
-            self._canvas.yview_scroll(1, "units")
-        else:
-            delta = getattr(event, "delta", 0)
-            if delta:
-                self._canvas.yview_scroll(int(-1 * (delta / 120)), "units")
+    def _reload_drawer(self) -> None:
+        """Re-read tasks.json / launch.json and folder state."""
+        if self._drawer.project is not None:
+            self._drawer.set_project(self._drawer.project, animate=False)
 
-    def _bind_wheel_scroll_tree(self, widget: tk.Widget) -> None:
-        """So wheel works when the pointer is over project cards, not only the scrollbar."""
-        widget.bind("<MouseWheel>", self._on_grid_mousewheel)
-        widget.bind("<Button-4>", self._on_grid_mousewheel)
-        widget.bind("<Button-5>", self._on_grid_mousewheel)
-        for child in widget.winfo_children():
-            self._bind_wheel_scroll_tree(child)
-
-    def _on_editor_change(self, event=None):
-        display = self._editor_var.get()
-        editor = self._editor_display.get(display, "cursor")
-        ProjectService.set_editor(editor)
-        self._sub_panel.refresh_editor()
-
-    def _on_terminal_change(self, event=None):
-        terminal = self._terminal_reverse.get(self._terminal_var.get(), "windows_terminal")
-        ProjectService.set_terminal(terminal)
-        self._sub_panel.refresh_terminal()
+    # -- projects --
 
     def _on_sub_project_opened(self, project: Project) -> None:
-        self._project_service.increment_open_count(project.id)
-        self._refresh_grid()
+        self._service.increment_open_count(project.id)
+        self._rail.set_projects(self._visible_projects(), self._selected_id)
 
-    def _refresh_grid(self):
-        for w in self._card_widgets:
-            w.destroy()
-        self._card_widgets.clear()
+    def _on_add_project(self) -> None:
+        project = ProjectDialog.edit(self, None)
+        if project is None:
+            return
+        self._service.add(project)
+        self._selected_id = project.id
+        self._search.clear()
+        self._refresh_rail()
+        self._drawer.set_project(project)
 
-        for w in self._grid_inner.winfo_children():
-            w.destroy()
+    def _on_edit_project(self, project: Project) -> None:
+        updated = ProjectDialog.edit(self, project)
+        if updated is None:
+            return
+        self._service.update(updated)
+        clear_cache()
+        self._refresh_rail()
+        if self._drawer.project is not None and self._drawer.project.id == updated.id:
+            self._drawer.set_project(updated, animate=False)
 
-        projects = self._project_service.get_all()
-        search = self._search_var.get().strip().lower()
-        if search:
-            projects = [p for p in projects if search in p.name.lower()]
-        projects.sort(key=lambda p: p.open_count, reverse=True)
-
-        for i, project in enumerate(projects):
-            row = i // self.GRID_COLS
-            col = i % self.GRID_COLS
-            is_selected = self._selected_project and self._selected_project.id == project.id
-            card = ProjectCard(
-                self._grid_inner,
-                project,
-                on_click=self._on_project_click,
-                on_edit=self._on_edit_project,
-                on_delete=self._on_delete_project,
-                is_selected=is_selected,
-            )
-            card.grid(row=row, column=col, padx=8, pady=8, sticky="nsew")
-            self._card_widgets.append(card)
-
-        for c in range(self.GRID_COLS):
-            self._grid_inner.columnconfigure(c, weight=1)
-
-        # New cards are recreated each refresh; re-bind wheel on the grid subtree only.
-        self._bind_wheel_scroll_tree(self._grid_inner)
-
-    def _on_add_project(self):
-        def on_save(project: Project):
-            self._project_service.add(project)
-            self._refresh_grid()
-
-        AddEditDialog(self.root, project=None, on_save=on_save)
-
-    def _on_project_click(self, project: Project):
-        self._selected_project = project
-        for card in self._card_widgets:
-            card.set_selected(card.project.id == project.id)
-        self._sub_panel.set_project(project)
-
-    def _on_edit_project(self, project: Project):
-        def on_save(updated: Project):
-            self._project_service.update(updated)
-            self._refresh_grid()
-            if self._selected_project and self._selected_project.id == updated.id:
-                self._sub_panel.set_project(updated)
-
-        AddEditDialog(self.root, project=project, on_save=on_save)
-
-    def _on_delete_project(self, project: Project):
-        if not messagebox.askyesno(
-            "Delete Project",
-            f"Delete project '{project.name}'? This cannot be undone.",
+    def _on_delete_project(self, project: Project) -> None:
+        if not dialogs.confirm(
+            self, "Delete project", f"Delete “{project.name}”? This cannot be undone.\n\nOnly the entry is removed; no files are touched.",
+            "Delete project", danger=True,
         ):
             return
-        self._project_service.delete(project.id)
-        if self._selected_project and self._selected_project.id == project.id:
-            self._selected_project = None
-            self._sub_panel.set_project(None)
-        self._refresh_grid()
+        self._service.delete(project.id)
+        if self._selected_id == project.id:
+            self._selected_id = None
+            self._drawer.show_empty("none")
+        self._refresh_rail()
+
+    # -- top bar --
+
+    def _on_editor_change(self) -> None:
+        ProjectService.set_editor(self._editor_box.currentData())
+        self._drawer.refresh_editor()
+
+    def _on_terminal_change(self) -> None:
+        ProjectService.set_terminal(self._terminal_box.currentData())
+        self._drawer.refresh_terminal()
+
+    def _toggle_text_panel(self, show: bool) -> None:
+        self._texts.setVisible(show)
+        if show:
+            self._texts.refresh()
+            if self.width() < 1300 and not self.isMaximized():
+                self.resize(1300, self.height())
+            sizes = self._splitter.sizes()
+            self._splitter.setSizes([sizes[0], max(400, sizes[1] - 320), 320])
+
+    def _update_theme_btn(self) -> None:
+        dark = Theme.get().is_dark
+        self._theme_btn.set_icon_name("sun" if dark else "moon")
+        self._theme_btn.setToolTip("Switch to light mode" if dark else "Switch to night mode")
 
     def _toggle_theme(self) -> None:
-        is_dark = ThemeManager().toggle()
-        ProjectService.set_theme("dark" if is_dark else "light")
-        self._theme_btn.config(text="Light Mode" if is_dark else "Night Mode")
-        self._apply_tk_theme()
-        self._refresh_grid()
-        self._text_panel.apply_theme()
+        theme = Theme.get()
+        theme.set_dark(not theme.is_dark)
+        ProjectService.set_theme("dark" if theme.is_dark else "light")
+        self._update_theme_btn()
+        self._mark.setPixmap(icons.pixmap("drawer", t("yellow"), 20))
 
-    def _apply_tk_theme(self) -> None:
-        c = ThemeManager().colors
-        self.root.configure(bg=c["bg"])
-        self._canvas.configure(bg=c["bg"], highlightbackground=c["bg"])
+    def _file_menu(self, button: ToolSlot) -> None:
+        menu = Menu(button)
+        menu.add("Export projects…", self._on_export, icon_name="export")
+        menu.add("Import projects…", self._on_import, icon_name="import")
+        menu.popup_below(button)
 
-    def run(self):
-        self.root.mainloop()
+    def _on_export(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(self, "Export projects", "projects.json", "JSON files (*.json);;All files (*.*)")
+        if not path:
+            return
+        if self._service.export_to_file(path):
+            dialogs.info(self, "Export", "Projects exported.")
+        else:
+            dialogs.error(self, "Export", "Could not write the export file.")
+
+    def _on_import(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Import projects", "", "JSON files (*.json);;All files (*.*)")
+        if not path:
+            return
+        projects = self._service.import_from_file(path)
+        if projects is None:
+            dialogs.error(self, "Import", "Could not read that file. It is not a valid projects export.")
+            return
+
+        current_count = len(self._service.get_all())
+        if current_count:
+            choice = dialogs.choose(
+                self, "Import",
+                f"The file has {len(projects)} project(s). You have {current_count}.\n\n"
+                "Merge adds new projects and updates ones with the same id.\n"
+                "Overwrite replaces all of your current projects.",
+                ["Merge", "Overwrite"],
+            )
+            if choice is None:
+                return
+            if choice == 1:
+                if not dialogs.confirm(
+                    self, "Overwrite projects",
+                    f"Replace all {current_count} current project(s) with {len(projects)} imported project(s)?",
+                    "Overwrite", danger=True,
+                ):
+                    return
+                self._service.replace_all(projects)
+            else:
+                self._service.merge_projects(projects)
+        else:
+            self._service.replace_all(projects)
+
+        self._selected_id = None
+        self._drawer.show_empty("none")
+        self._refresh_rail()
+        dialogs.info(self, "Import", f"Imported {len(projects)} project(s).")
+
+    # -- closing --
+
+    def closeEvent(self, event) -> None:
+        FlutterRunWindow.shutdown_all()  # Don't leave `flutter run` processes behind
+        event.accept()
+        QApplication.instance().quit()

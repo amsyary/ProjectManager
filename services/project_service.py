@@ -1,6 +1,7 @@
 """CRUD operations for projects and settings persistence."""
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -222,6 +223,23 @@ class ProjectService:
         """Save theme preference ('light' or 'dark')."""
         data = _read_settings()
         data["theme"] = theme
+        _write_settings(data)
+
+    @staticmethod
+    def _folder_key(folder: str) -> str:
+        return os.path.normcase(os.path.normpath(folder))
+
+    @staticmethod
+    def get_flutter_run(folder: str) -> dict:
+        """Saved Flutter run settings (config, device, mode, ...) for a folder; {} if none."""
+        saved = _read_settings().get("flutter_runs", {}).get(ProjectService._folder_key(folder))
+        return saved if isinstance(saved, dict) else {}
+
+    @staticmethod
+    def set_flutter_run(folder: str, settings: dict) -> None:
+        """Save the Flutter run settings for a folder."""
+        data = _read_settings()
+        data.setdefault("flutter_runs", {})[ProjectService._folder_key(folder)] = settings
         _write_settings(data)
 
     @staticmethod

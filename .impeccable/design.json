@@ -1,0 +1,871 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-29T00:52:38+00:00",
+  "title": "Design System: Project Manager",
+  "extensions": {
+    "colorMeta": {
+      "cabinet": {
+        "role": "neutral",
+        "displayName": "Cabinet",
+        "canonical": "#16181B",
+        "oklch": "oklch(20.8% 0.007 258.4)",
+        "tonalRamp": [
+          "#090B0E",
+          "#232528",
+          "#404246",
+          "#5F6165",
+          "#808286",
+          "#A2A5A9",
+          "#C6C9CE",
+          "#ECEFF3"
+        ]
+      },
+      "rail": {
+        "role": "neutral",
+        "displayName": "Rail",
+        "canonical": "#1C1E22",
+        "oklch": "oklch(23.5% 0.008 264.4)",
+        "tonalRamp": [
+          "#090B0F",
+          "#232529",
+          "#404247",
+          "#5F6166",
+          "#808287",
+          "#A2A5AA",
+          "#C6C9CF",
+          "#ECEEF4"
+        ]
+      },
+      "foam": {
+        "role": "neutral",
+        "displayName": "Foam",
+        "canonical": "#26292D",
+        "oklch": "oklch(28.0% 0.009 255.6)",
+        "tonalRamp": [
+          "#090B0F",
+          "#222529",
+          "#3F4247",
+          "#5E6166",
+          "#7F8387",
+          "#A2A5AA",
+          "#C5C9CF",
+          "#EBEFF4"
+        ]
+      },
+      "foam-hi": {
+        "role": "neutral",
+        "displayName": "Pulled Foam",
+        "canonical": "#2D3035",
+        "oklch": "oklch(30.8% 0.010 260.7)",
+        "tonalRamp": [
+          "#090B0F",
+          "#22252A",
+          "#3F4247",
+          "#5E6167",
+          "#7F8288",
+          "#A1A5AB",
+          "#C5C9D0",
+          "#EBEFF5"
+        ]
+      },
+      "cut": {
+        "role": "neutral",
+        "displayName": "Cut Floor",
+        "canonical": "#131518",
+        "oklch": "oklch(19.5% 0.007 258.4)",
+        "tonalRamp": [
+          "#090B0E",
+          "#232528",
+          "#404246",
+          "#5F6165",
+          "#808286",
+          "#A2A5A9",
+          "#C6C9CE",
+          "#ECEFF3"
+        ]
+      },
+      "cut-hi": {
+        "role": "neutral",
+        "displayName": "Lit Floor",
+        "canonical": "#1C1F23",
+        "oklch": "oklch(23.8% 0.009 255.6)",
+        "tonalRamp": [
+          "#090B0F",
+          "#222529",
+          "#3F4247",
+          "#5E6266",
+          "#7F8388",
+          "#A1A5AB",
+          "#C5C9CF",
+          "#EBEFF5"
+        ]
+      },
+      "wall-dark": {
+        "role": "neutral",
+        "displayName": "Shadowed Wall",
+        "canonical": "#08090A",
+        "oklch": "oklch(13.9% 0.003 246.3)",
+        "tonalRamp": [
+          "#0A0B0C",
+          "#242526",
+          "#414243",
+          "#606163",
+          "#818284",
+          "#A3A5A7",
+          "#C8C9CB",
+          "#EDEFF0"
+        ]
+      },
+      "wall-light": {
+        "role": "neutral",
+        "displayName": "Lit Lip",
+        "canonical": "#383C42",
+        "oklch": "oklch(35.5% 0.012 258.4)",
+        "tonalRamp": [
+          "#080B10",
+          "#22252B",
+          "#3E4248",
+          "#5D6268",
+          "#7E838A",
+          "#A1A5AD",
+          "#C5C9D1",
+          "#EAEFF7"
+        ]
+      },
+      "edge": {
+        "role": "neutral",
+        "displayName": "Hairline Edge",
+        "canonical": "#33373D",
+        "oklch": "oklch(33.5% 0.012 258.4)",
+        "tonalRamp": [
+          "#080B10",
+          "#22252B",
+          "#3E4248",
+          "#5D6268",
+          "#7E838A",
+          "#A1A5AD",
+          "#C4C9D1",
+          "#EAEFF7"
+        ]
+      },
+      "shadow": {
+        "role": "neutral",
+        "displayName": "Shadow",
+        "canonical": "#000000",
+        "oklch": "oklch(0.0% 0.000 0.0)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#A5A5A5",
+          "#C9C9C9",
+          "#EEEEEE"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Bone Ink",
+        "canonical": "#ECE8E0",
+        "oklch": "oklch(93.2% 0.012 84.6)",
+        "tonalRamp": [
+          "#0D0B06",
+          "#28251F",
+          "#45423B",
+          "#64615A",
+          "#85827B",
+          "#A8A59D",
+          "#CDC9C1",
+          "#F2EEE6"
+        ]
+      },
+      "ink-dim": {
+        "role": "neutral",
+        "displayName": "Dust Ink",
+        "canonical": "#A6A49D",
+        "oklch": "oklch(71.8% 0.010 93.6)",
+        "tonalRamp": [
+          "#0D0B07",
+          "#272520",
+          "#44423C",
+          "#63615B",
+          "#84827C",
+          "#A7A59E",
+          "#CBC9C2",
+          "#F1EEE7"
+        ]
+      },
+      "ink-faint": {
+        "role": "neutral",
+        "displayName": "Faint Ink",
+        "canonical": "#8E8D88",
+        "oklch": "oklch(64.3% 0.007 97.4)",
+        "tonalRamp": [
+          "#0C0B08",
+          "#262521",
+          "#43423E",
+          "#62615D",
+          "#83827D",
+          "#A6A5A0",
+          "#CAC9C4",
+          "#F0EFE9"
+        ]
+      },
+      "yellow": {
+        "role": "primary",
+        "displayName": "Chrome Yellow",
+        "canonical": "#F2B705",
+        "oklch": "oklch(81.1% 0.166 85.0)",
+        "tonalRamp": [
+          "#110A00",
+          "#312200",
+          "#553E00",
+          "#7B5C04",
+          "#A47B03",
+          "#CF9C01",
+          "#FABF1F",
+          "#FFEDC8"
+        ]
+      },
+      "yellow-hi": {
+        "role": "primary",
+        "displayName": "Bright Yellow",
+        "canonical": "#FFC727",
+        "oklch": "oklch(85.6% 0.167 86.8)",
+        "tonalRamp": [
+          "#110A00",
+          "#302301",
+          "#543F00",
+          "#7A5D04",
+          "#A27C04",
+          "#CD9D02",
+          "#F8C018",
+          "#FFEDC5"
+        ]
+      },
+      "yellow-wall": {
+        "role": "primary",
+        "displayName": "Ochre Wall",
+        "canonical": "#A97F00",
+        "oklch": "oklch(62.1% 0.127 85.2)",
+        "tonalRamp": [
+          "#110A00",
+          "#312301",
+          "#553E01",
+          "#7B5C05",
+          "#A47B05",
+          "#C99E38",
+          "#EFC360",
+          "#FFEDC7"
+        ]
+      },
+      "on-yellow": {
+        "role": "primary",
+        "displayName": "Yellow Ink",
+        "canonical": "#17150F",
+        "oklch": "oklch(19.6% 0.012 91.8)",
+        "tonalRamp": [
+          "#0D0B06",
+          "#27251F",
+          "#44423B",
+          "#64615A",
+          "#85827A",
+          "#A8A59D",
+          "#CCC9C1",
+          "#F1EEE6"
+        ]
+      },
+      "red": {
+        "role": "secondary",
+        "displayName": "Signal Red",
+        "canonical": "#E5534B",
+        "oklch": "oklch(63.7% 0.183 26.7)",
+        "tonalRamp": [
+          "#1F0001",
+          "#4D0104",
+          "#80020B",
+          "#B21D1F",
+          "#DA4942",
+          "#FF7368",
+          "#FEB3AA",
+          "#FFE9E6"
+        ]
+      },
+      "on-red": {
+        "role": "secondary",
+        "displayName": "Red Ink",
+        "canonical": "#FFFFFF",
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#A5A5A5",
+          "#C9C9C9",
+          "#EEEEEE"
+        ]
+      },
+      "tape": {
+        "role": "neutral",
+        "displayName": "Label Tape",
+        "canonical": "#111214",
+        "oklch": "oklch(18.2% 0.004 264.5)",
+        "tonalRamp": [
+          "#0A0B0D",
+          "#242527",
+          "#414244",
+          "#606164",
+          "#818285",
+          "#A4A5A8",
+          "#C8C9CC",
+          "#EDEEF1"
+        ]
+      },
+      "tape-ink": {
+        "role": "neutral",
+        "displayName": "Tape Ink",
+        "canonical": "#F3F1EC",
+        "oklch": "oklch(95.8% 0.007 88.6)",
+        "tonalRamp": [
+          "#0C0B08",
+          "#262521",
+          "#43423E",
+          "#63615D",
+          "#84827E",
+          "#A7A5A0",
+          "#CBC9C4",
+          "#F0EEE9"
+        ]
+      },
+      "light-cabinet": {
+        "role": "neutral",
+        "displayName": "Cabinet (light)",
+        "canonical": "#C6C8C9",
+        "oklch": "oklch(83.2% 0.003 228.8)",
+        "tonalRamp": [
+          "#0A0B0C",
+          "#242526",
+          "#414243",
+          "#606162",
+          "#818383",
+          "#A3A5A6",
+          "#C7C9CA",
+          "#EDEFF0"
+        ]
+      },
+      "light-rail": {
+        "role": "neutral",
+        "displayName": "Rail (light)",
+        "canonical": "#D2D4D5",
+        "oklch": "oklch(86.9% 0.003 228.8)",
+        "tonalRamp": [
+          "#0A0B0C",
+          "#242526",
+          "#414243",
+          "#606162",
+          "#818383",
+          "#A3A5A6",
+          "#C7C9CA",
+          "#EDEFF0"
+        ]
+      },
+      "light-foam": {
+        "role": "neutral",
+        "displayName": "Foam (light)",
+        "canonical": "#E8E9EA",
+        "oklch": "oklch(93.4% 0.002 247.8)",
+        "tonalRamp": [
+          "#0B0B0C",
+          "#242526",
+          "#414243",
+          "#606162",
+          "#818283",
+          "#A4A5A6",
+          "#C8C9CA",
+          "#EDEEEF"
+        ]
+      },
+      "light-foam-hi": {
+        "role": "neutral",
+        "displayName": "Pulled Foam (light)",
+        "canonical": "#F2F3F4",
+        "oklch": "oklch(96.4% 0.002 247.8)",
+        "tonalRamp": [
+          "#0B0B0C",
+          "#242526",
+          "#414243",
+          "#606162",
+          "#818283",
+          "#A4A5A6",
+          "#C8C9CA",
+          "#EDEEEF"
+        ]
+      },
+      "light-cut": {
+        "role": "neutral",
+        "displayName": "Cut Floor (light)",
+        "canonical": "#CFD1D2",
+        "oklch": "oklch(85.9% 0.003 228.8)",
+        "tonalRamp": [
+          "#0A0B0C",
+          "#242526",
+          "#414243",
+          "#606162",
+          "#818383",
+          "#A3A5A6",
+          "#C7C9CA",
+          "#EDEFF0"
+        ]
+      },
+      "light-cut-hi": {
+        "role": "neutral",
+        "displayName": "Lit Floor (light)",
+        "canonical": "#C4C6C8",
+        "oklch": "oklch(82.6% 0.004 247.9)",
+        "tonalRamp": [
+          "#0A0B0D",
+          "#242527",
+          "#404244",
+          "#606163",
+          "#818284",
+          "#A3A5A7",
+          "#C7C9CB",
+          "#EDEFF1"
+        ]
+      },
+      "light-wall-dark": {
+        "role": "neutral",
+        "displayName": "Shadowed Wall (light)",
+        "canonical": "#989B9E",
+        "oklch": "oklch(68.8% 0.006 247.9)",
+        "tonalRamp": [
+          "#090B0D",
+          "#232528",
+          "#404245",
+          "#5F6264",
+          "#808386",
+          "#A2A5A8",
+          "#C6C9CD",
+          "#ECEFF2"
+        ]
+      },
+      "light-wall-light": {
+        "role": "neutral",
+        "displayName": "Lit Lip (light)",
+        "canonical": "#FAFBFB",
+        "oklch": "oklch(98.7% 0.001 197.1)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242525",
+          "#414242",
+          "#606161",
+          "#818282",
+          "#A4A5A5",
+          "#C8C9C9",
+          "#EEEFEF"
+        ]
+      },
+      "light-edge": {
+        "role": "neutral",
+        "displayName": "Hairline Edge (light)",
+        "canonical": "#BDC0C2",
+        "oklch": "oklch(80.6% 0.004 236.5)",
+        "tonalRamp": [
+          "#090B0D",
+          "#232527",
+          "#404244",
+          "#5F6263",
+          "#808385",
+          "#A2A5A7",
+          "#C6CACC",
+          "#ECEFF1"
+        ]
+      },
+      "light-shadow": {
+        "role": "neutral",
+        "displayName": "Shadow (light)",
+        "canonical": "#4A4E52",
+        "oklch": "oklch(42.2% 0.008 248.0)",
+        "tonalRamp": [
+          "#080C0F",
+          "#222529",
+          "#3F4246",
+          "#5E6266",
+          "#7E8387",
+          "#A1A6AA",
+          "#C5CACE",
+          "#EAEFF4"
+        ]
+      },
+      "light-ink": {
+        "role": "neutral",
+        "displayName": "Bone Ink (light)",
+        "canonical": "#1B1C1E",
+        "oklch": "oklch(22.6% 0.004 264.5)",
+        "tonalRamp": [
+          "#0A0B0D",
+          "#242527",
+          "#414244",
+          "#606164",
+          "#818285",
+          "#A4A5A8",
+          "#C8C9CC",
+          "#EDEEF1"
+        ]
+      },
+      "light-ink-dim": {
+        "role": "neutral",
+        "displayName": "Dust Ink (light)",
+        "canonical": "#4F5054",
+        "oklch": "oklch(43.2% 0.007 274.8)",
+        "tonalRamp": [
+          "#0A0B0E",
+          "#242528",
+          "#414246",
+          "#606165",
+          "#818286",
+          "#A4A5A9",
+          "#C8C9CE",
+          "#EDEEF3"
+        ]
+      },
+      "light-ink-faint": {
+        "role": "neutral",
+        "displayName": "Faint Ink (light)",
+        "canonical": "#55565A",
+        "oklch": "oklch(45.4% 0.007 274.9)",
+        "tonalRamp": [
+          "#0A0B0E",
+          "#242528",
+          "#414246",
+          "#606165",
+          "#818286",
+          "#A4A5A9",
+          "#C8C9CD",
+          "#EDEEF3"
+        ]
+      },
+      "light-yellow-hi": {
+        "role": "primary",
+        "displayName": "Bright Yellow (light)",
+        "canonical": "#FFC52E",
+        "oklch": "oklch(85.3% 0.164 85.4)",
+        "tonalRamp": [
+          "#110A00",
+          "#312300",
+          "#543E02",
+          "#7B5C03",
+          "#A47B01",
+          "#CE9C0A",
+          "#F9BF24",
+          "#FEEDC8"
+        ]
+      },
+      "light-yellow-wall": {
+        "role": "primary",
+        "displayName": "Ochre Wall (light)",
+        "canonical": "#B58700",
+        "oklch": "oklch(65.0% 0.133 84.3)",
+        "tonalRamp": [
+          "#110A00",
+          "#312201",
+          "#553E00",
+          "#7B5B05",
+          "#A57B05",
+          "#CC9D2E",
+          "#F2C259",
+          "#FFECC8"
+        ]
+      },
+      "light-red": {
+        "role": "secondary",
+        "displayName": "Signal Red (light)",
+        "canonical": "#C93B33",
+        "oklch": "oklch(56.2% 0.180 27.7)",
+        "tonalRamp": [
+          "#1F0000",
+          "#4D0002",
+          "#810106",
+          "#B1201D",
+          "#D94B41",
+          "#FF7466",
+          "#FFB3A9",
+          "#FFE9E6"
+        ]
+      },
+      "light-tape": {
+        "role": "neutral",
+        "displayName": "Label Tape (light)",
+        "canonical": "#151618",
+        "oklch": "oklch(20.0% 0.004 264.5)",
+        "tonalRamp": [
+          "#0A0B0D",
+          "#242527",
+          "#414244",
+          "#606164",
+          "#818285",
+          "#A4A5A8",
+          "#C8C9CC",
+          "#EDEEF1"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Title",
+        "purpose": "Folder names, the open drawer front, status words, empty-state headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Drawer-front names, input text, dialog prose. App default font."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Counts, hints, shortcut legends in Dust Ink."
+      },
+      "label-tool": {
+        "displayName": "Tool Label",
+        "purpose": "Every tool label, uppercase."
+      },
+      "label-caps": {
+        "displayName": "Caps Label",
+        "purpose": "Field labels and folder types, uppercase, Dust Ink."
+      },
+      "tape": {
+        "displayName": "Tape",
+        "purpose": "The project name on Dymo tape; nothing else."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Paths and the running tool's clock label."
+      },
+      "mono-field": {
+        "displayName": "Mono Field",
+        "purpose": "Path/target/args fields and the Flutter log."
+      }
+    },
+    "shadows": [
+      {
+        "name": "foam-drop",
+        "value": "0 1px 0 rgba(0,0,0,.13), 0 2px 0 rgba(0,0,0,.07), 0 4px 0 rgba(0,0,0,.04)",
+        "purpose": "Raised foam slabs and the open drawer front. Alpha halves in light. Painted as three offset copies of the slab shape."
+      },
+      {
+        "name": "foam-top-highlight",
+        "value": "inset 0 1px 0 rgba(255,255,255,.04)",
+        "purpose": "Faint lit top edge of foam (alpha 150/255 in light)."
+      },
+      {
+        "name": "cut-wall",
+        "value": "inset 0 6px 6px -6px rgba(8,9,10,.59), inset 0 -1px 0 rgba(56,60,66,.47)",
+        "purpose": "Every recess: tools, inputs, icon wells, checkboxes. Shadowed upper wall plus lit bottom lip."
+      },
+      {
+        "name": "tape-drop",
+        "value": "0 1.5px 0 rgba(0,0,0,.27)",
+        "purpose": "Thickness of Dymo tape on the foam; tape only."
+      },
+      {
+        "name": "focus-ring",
+        "value": "0 0 0 2px #F2B705",
+        "purpose": "Keyboard focus around tools (1px border on fields)."
+      }
+    ],
+    "motion": [
+      {
+        "name": "tool-hover",
+        "value": "140ms cubic-bezier(0.33, 1, 0.68, 1)",
+        "purpose": "Tool floor and 1px lift on hover (Qt OutCubic)."
+      },
+      {
+        "name": "drawer-open",
+        "value": "240ms cubic-bezier(0.33, 1, 0.68, 1)",
+        "purpose": "Drawer content fades in and slides 14px from the right."
+      },
+      {
+        "name": "lamp-breathe",
+        "value": "700ms cubic-bezier(0.37, 0, 0.63, 1) infinite",
+        "purpose": "Status lamp alpha 0.35 to 1 while building or stopping (InOutSine)."
+      },
+      {
+        "name": "scan-sweep",
+        "value": "1400ms cubic-bezier(0.37, 0, 0.63, 1) infinite",
+        "purpose": "Yellow segment sweeping the 4px scan bar while Flutter builds or stops."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "window-min",
+        "value": "880px"
+      },
+      {
+        "name": "top-strip-labels",
+        "value": "1080px"
+      },
+      {
+        "name": "window-default",
+        "value": "1200px"
+      },
+      {
+        "name": "with-snippets",
+        "value": "1300px"
+      }
+    ],
+    "platform": "Native Windows desktop (PySide6 / Qt Widgets). Source of truth: ui/theme.py (DARK, LIGHT, SIZE_*, RADIUS_*, build_stylesheet) and ui/widgets.py (painted components). CSS here is an approximation for preview only."
+  },
+  "components": [
+    {
+      "name": "Tool Slot",
+      "kind": "button",
+      "refersTo": "tool-slot",
+      "description": "A tool in its own cut-out; the default for every action.",
+      "html": "<button class=\"ds-slot\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"4.5\" width=\"18\" height=\"15\" rx=\"2.2\"/><path d=\"m7 9.5 3 2.5-3 2.5M12.5 15h4.5\"/></svg><span>Terminal</span></button>",
+      "css": ".ds-slot { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 12px; border: none; border-radius: 7px; background: #131518; color: #ECE8E0; font: 600 12px 'Bahnschrift SemiBold', Bahnschrift, 'Segoe UI', sans-serif; letter-spacing: .6px; text-transform: uppercase; cursor: pointer; box-shadow: inset 0 6px 6px -6px rgba(8,9,10,.59), inset 0 -1px 0 rgba(56,60,66,.47); transition: background .14s cubic-bezier(.33,1,.68,1); } .ds-slot svg { transition: transform .14s cubic-bezier(.33,1,.68,1); } .ds-slot:hover { background: #1C1F23; } .ds-slot:hover > * { transform: translateY(-1px); } .ds-slot:active { background: #F2B705; color: #17150F; } .ds-slot:focus-visible { outline: 2px solid #F2B705; outline-offset: 1px; }"
+    },
+    {
+      "name": "Primary Tool Slot",
+      "kind": "button",
+      "refersTo": "tool-slot-primary",
+      "description": "The one launch action per slab or dialog: the yellow under-layer shows.",
+      "html": "<button class=\"ds-slot ds-slot-primary\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8.5 7.5 4 12l4.5 4.5M15.5 7.5 20 12l-4.5 4.5M13.6 5l-3.2 14\"/></svg><span>Open all</span></button>",
+      "css": ".ds-slot { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 12px; border: none; border-radius: 7px; background: #131518; color: #ECE8E0; font: 600 12px 'Bahnschrift SemiBold', Bahnschrift, 'Segoe UI', sans-serif; letter-spacing: .6px; text-transform: uppercase; cursor: pointer; box-shadow: inset 0 6px 6px -6px rgba(8,9,10,.59), inset 0 -1px 0 rgba(56,60,66,.47); transition: background .14s cubic-bezier(.33,1,.68,1); } .ds-slot svg { transition: transform .14s cubic-bezier(.33,1,.68,1); } .ds-slot:hover { background: #1C1F23; } .ds-slot:hover > * { transform: translateY(-1px); } .ds-slot:active { background: #F2B705; color: #17150F; } .ds-slot:focus-visible { outline: 2px solid #F2B705; outline-offset: 1px; } .ds-slot-primary { background: #F2B705; color: #17150F; box-shadow: inset 0 6px 6px -6px rgba(169,127,0,.59), inset 0 -1px 0 rgba(56,60,66,.47); } .ds-slot-primary:hover { background: #FFC727; }"
+    },
+    {
+      "name": "Running Tool (Out)",
+      "kind": "custom",
+      "refersTo": "tool-slot-out",
+      "description": "A tool lifted out of its slot while Flutter or scrcpy runs: yellow floor, dashed outline, mono clock.",
+      "html": "<button class=\"ds-slot ds-slot-out\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4.6 12a7.4 7.4 0 1 0 2.3-5.4\"/><path d=\"M4.4 3.8v4.6H9\"/></svg><span>Building 0:42</span></button>",
+      "css": ".ds-slot { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 12px; border: none; border-radius: 7px; background: #131518; color: #ECE8E0; font: 600 12px 'Bahnschrift SemiBold', Bahnschrift, 'Segoe UI', sans-serif; letter-spacing: .6px; text-transform: uppercase; cursor: pointer; box-shadow: inset 0 6px 6px -6px rgba(8,9,10,.59), inset 0 -1px 0 rgba(56,60,66,.47); transition: background .14s cubic-bezier(.33,1,.68,1); } .ds-slot svg { transition: transform .14s cubic-bezier(.33,1,.68,1); } .ds-slot:hover { background: #1C1F23; } .ds-slot:hover > * { transform: translateY(-1px); } .ds-slot:active { background: #F2B705; color: #17150F; } .ds-slot:focus-visible { outline: 2px solid #F2B705; outline-offset: 1px; } .ds-slot-out { position: relative; min-width: 146px; background: #F2B705; color: #17150F; font: 400 12px 'Cascadia Mono', Consolas, monospace; letter-spacing: 0; text-transform: none; box-shadow: inset 0 6px 6px -6px rgba(169,127,0,.59); } .ds-slot-out::after { content: ''; position: absolute; inset: 3.5px; border: 1.3px dashed #A97F00; border-radius: 4px; pointer-events: none; } .ds-slot-out:hover { background: #F2B705; }"
+    },
+    {
+      "name": "Danger Tool",
+      "kind": "button",
+      "refersTo": "tool-slot-danger-hover",
+      "description": "Delete or Stop: neutral at rest, red floor only on hover.",
+      "html": "<button class=\"ds-slot ds-slot-danger\" aria-label=\"Delete\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4.5 7h15M9.5 7V4.6h5V7M6.5 7l1 12.4c.1.8.7 1.4 1.5 1.4h6c.8 0 1.4-.6 1.5-1.4l1-12.4M10 11v6M14 11v6\"/></svg></button>",
+      "css": ".ds-slot { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 12px; border: none; border-radius: 7px; background: #131518; color: #ECE8E0; font: 600 12px 'Bahnschrift SemiBold', Bahnschrift, 'Segoe UI', sans-serif; letter-spacing: .6px; text-transform: uppercase; cursor: pointer; box-shadow: inset 0 6px 6px -6px rgba(8,9,10,.59), inset 0 -1px 0 rgba(56,60,66,.47); transition: background .14s cubic-bezier(.33,1,.68,1); } .ds-slot svg { transition: transform .14s cubic-bezier(.33,1,.68,1); } .ds-slot:hover { background: #1C1F23; } .ds-slot:hover > * { transform: translateY(-1px); } .ds-slot:active { background: #F2B705; color: #17150F; } .ds-slot:focus-visible { outline: 2px solid #F2B705; outline-offset: 1px; } .ds-slot-danger { width: 34px; padding: 0; } .ds-slot-danger:hover { background: #E5534B; color: #FFFFFF; box-shadow: none; }"
+    },
+    {
+      "name": "Quiet Tool",
+      "kind": "button",
+      "refersTo": "tool-slot-quiet",
+      "description": "Icon-only secondary tool whose slot appears only on hover.",
+      "html": "<button class=\"ds-slot ds-slot-quiet\" aria-label=\"Edit project\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m14.4 5.6 4 4M4.5 19.5l1-4.4L15.7 4.9a1.4 1.4 0 0 1 2 0l1.4 1.4a1.4 1.4 0 0 1 0 2L8.9 18.5z\"/></svg></button>",
+      "css": ".ds-slot { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 12px; border: none; border-radius: 7px; background: #131518; color: #ECE8E0; font: 600 12px 'Bahnschrift SemiBold', Bahnschrift, 'Segoe UI', sans-serif; letter-spacing: .6px; text-transform: uppercase; cursor: pointer; box-shadow: inset 0 6px 6px -6px rgba(8,9,10,.59), inset 0 -1px 0 rgba(56,60,66,.47); transition: background .14s cubic-bezier(.33,1,.68,1); } .ds-slot svg { transition: transform .14s cubic-bezier(.33,1,.68,1); } .ds-slot:hover { background: #1C1F23; } .ds-slot:hover > * { transform: translateY(-1px); } .ds-slot:active { background: #F2B705; color: #17150F; } .ds-slot:focus-visible { outline: 2px solid #F2B705; outline-offset: 1px; } .ds-slot-quiet { width: 34px; padding: 0; background: transparent; box-shadow: none; color: #A6A49D; } .ds-slot-quiet:hover { background: #1C1F23; color: #ECE8E0; box-shadow: inset 0 6px 6px -6px rgba(8,9,10,.59), inset 0 -1px 0 rgba(56,60,66,.47); }"
+    },
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A text field cut into the foam; yellow border on focus.",
+      "html": "<label class=\"ds-input\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"10.5\" cy=\"10.5\" r=\"6\"/><path d=\"m15 15 5 5\"/></svg><input placeholder=\"Search projects   Ctrl+F\"></label>",
+      "css": ".ds-input { display: flex; align-items: center; gap: 8px; width: 260px; padding: 6px 10px; border-radius: 7px; background: #131518; color: #8E8D88; border: 1px solid #131518; border-top-color: #08090A; border-bottom-color: #383C42; } .ds-input:hover { background: #1C1F23; } .ds-input:focus-within { border-color: #F2B705; } .ds-input input { flex: 1; background: transparent; border: none; outline: none; color: #ECE8E0; font: 400 14px Bahnschrift, 'Segoe UI', sans-serif; } .ds-input input::placeholder { color: #8E8D88; }"
+    },
+    {
+      "name": "Folder Slab",
+      "kind": "card",
+      "refersTo": "folder-slab",
+      "description": "One folder as a raised foam slab: icon well, name, caps type and mono path, tools at the right.",
+      "html": "<div class=\"ds-slab\"><div class=\"ds-well\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3.5 7.2c0-.9.7-1.7 1.7-1.7h4l2 2.2h7.6c.9 0 1.7.8 1.7 1.7v8.4c0 .9-.8 1.7-1.7 1.7H5.2c-1 0-1.7-.8-1.7-1.7z\"/></svg></div><div class=\"ds-info\"><div class=\"ds-name\">Halo_Teacher_Client_Firebase</div><div class=\"ds-meta\"><span class=\"ds-caps\">Flutter</span><span class=\"ds-path\">A:/Hello Teacher/Source Code/Client</span></div></div><button class=\"ds-slot\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8.5 7.5 4 12l4.5 4.5M15.5 7.5 20 12l-4.5 4.5M13.6 5l-3.2 14\"/></svg><span>Open</span></button></div>",
+      "css": ".ds-slot { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 12px; border: none; border-radius: 7px; background: #131518; color: #ECE8E0; font: 600 12px 'Bahnschrift SemiBold', Bahnschrift, 'Segoe UI', sans-serif; letter-spacing: .6px; text-transform: uppercase; cursor: pointer; box-shadow: inset 0 6px 6px -6px rgba(8,9,10,.59), inset 0 -1px 0 rgba(56,60,66,.47); transition: background .14s cubic-bezier(.33,1,.68,1); } .ds-slot svg { transition: transform .14s cubic-bezier(.33,1,.68,1); } .ds-slot:hover { background: #1C1F23; } .ds-slot:hover > * { transform: translateY(-1px); } .ds-slot:active { background: #F2B705; color: #17150F; } .ds-slot:focus-visible { outline: 2px solid #F2B705; outline-offset: 1px; } .ds-slab { display: flex; align-items: center; gap: 14px; padding: 12px 12px 16px 14px; border-radius: 11px; background: #26292D; border: 1px solid #33373D; color: #ECE8E0; box-shadow: 0 1px 0 rgba(0,0,0,.13), 0 2px 0 rgba(0,0,0,.07), 0 4px 0 rgba(0,0,0,.04), inset 0 1px 0 rgba(255,255,255,.04); } .ds-well { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 9.7px; background: #131518; color: #8E8D88; box-shadow: inset 0 6px 6px -6px rgba(8,9,10,.59), inset 0 -1px 0 rgba(56,60,66,.47); } .ds-info { flex: 1; min-width: 0; } .ds-name { font: 600 14px 'Bahnschrift SemiBold', Bahnschrift, sans-serif; } .ds-meta { display: flex; gap: 8px; margin-top: 3px; font-size: 12px; color: #A6A49D; white-space: nowrap; overflow: hidden; } .ds-caps { font-family: Bahnschrift, sans-serif; letter-spacing: 1px; text-transform: uppercase; } .ds-path { font-family: 'Cascadia Mono', Consolas, monospace; overflow: hidden; text-overflow: ellipsis; }"
+    },
+    {
+      "name": "Dymo Tape",
+      "kind": "custom",
+      "refersTo": "dymo-tape",
+      "description": "The project name reversed out of black label tape; used for nothing else.",
+      "html": "<span class=\"ds-tape\">Hello Teacher</span>",
+      "css": ".ds-tape { display: inline-flex; align-items: center; height: 28px; padding: 0 9px 0 11px; border-radius: 3px; background: #111214; color: #F3F1EC; font: 600 14px 'Bahnschrift SemiBold Condensed', Bahnschrift, sans-serif; letter-spacing: .09em; text-transform: uppercase; box-shadow: 0 1.5px 0 rgba(0,0,0,.27), inset 0 1px 0 rgba(255,255,255,.09); }"
+    },
+    {
+      "name": "Drawer Front",
+      "kind": "nav",
+      "refersTo": "drawer-front-open",
+      "description": "A project in the rail; the open one is pulled 4px out, lighter foam, yellow pull handle.",
+      "html": "<div class=\"ds-rail\"><div class=\"ds-front ds-open\"><div class=\"ds-pocket\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3.5\" y=\"4\" width=\"17\" height=\"16\" rx=\"2\"/><path d=\"M3.5 12h17M9.5 8h5M9.5 16h5\"/></svg></div><div><div class=\"ds-fname\">Hello Teacher</div><div class=\"ds-fmeta\">3 folders  ·  opened 2×</div><i class=\"ds-handle\"></i></div><b class=\"ds-dot\"></b></div><div class=\"ds-front\"><div class=\"ds-pocket\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3.5\" y=\"4\" width=\"17\" height=\"16\" rx=\"2\"/><path d=\"M3.5 12h17M9.5 8h5M9.5 16h5\"/></svg></div><div><div class=\"ds-fname\" style=\"font-weight:400\">Testing</div><div class=\"ds-fmeta\">1 folder</div></div></div></div>",
+      "css": ".ds-rail { width: 280px; padding: 8px 0; background: #1C1E22; } .ds-front { position: relative; display: flex; align-items: center; gap: 12px; height: 56px; margin: 3px 8px 5px; padding: 0 10px; border-radius: 9px; color: #ECE8E0; transition: background .14s; } .ds-front:hover { background: #26292D; } .ds-open { transform: translateX(4px); background: #2D3035; border: 1px solid #33373D; box-shadow: 0 1px 0 rgba(0,0,0,.13), 0 2px 0 rgba(0,0,0,.07), 0 4px 0 rgba(0,0,0,.04); } .ds-pocket { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 9px; background: #131518; color: #8E8D88; box-shadow: inset 0 6px 6px -6px rgba(8,9,10,.59), inset 0 -1px 0 rgba(56,60,66,.47); } .ds-fname { font: 600 14px 'Bahnschrift SemiBold', Bahnschrift, sans-serif; } .ds-fmeta { font: 400 12px Bahnschrift, sans-serif; color: #A6A49D; } .ds-handle { display: block; width: 64px; height: 3px; margin-top: 5px; border-radius: 2px; background: #F2B705; } .ds-dot { position: absolute; right: 10px; top: 50%; width: 9px; height: 9px; margin-top: -4.5px; border-radius: 50%; background: #F2B705; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Kaizen Shadow Board",
+    "overview": "Project Manager is a tool cabinet. Each project is a drawer; each folder in it is a slab of foam; every action a folder can perform is a tool sitting in its own cut-out. The foam has two layers: a matte top layer (charcoal in dark, pale grey in light) and a flat chrome-yellow under-layer that only shows where something has been cut away. That one physical idea carries the whole system: controls are recessed into the foam rather than raised off it, yellow appears only where the top layer is gone (launch actions, focus, checked states, running tools), and a running Flutter app reads as an empty slot with its tool lifted out.\n\nThe density is that of a launcher opened many times a day for a few seconds: a rail of drawer fronts on the left, the open drawer filling the rest, a thin top strip for the editor, terminal, scrcpy and snippets. Names go on Dymo label tape, every label is set in DIN (Bahnschrift), and Cascadia Mono is kept for data: paths, commands, logs and the running clock. The system refuses the VS Code clone of grey panels with blue buttons; there is no blue anywhere.\n\nBoth themes are the same object under different light. Dark is the default; light swaps the foam to pale grey and keeps the yellow, the tape and the cut-out geometry identical.",
+    "keyCharacteristics": [
+      "Two depths only: raised foam slabs and recessed cut-outs.",
+      "One accent (chrome yellow) used as an under-layer, never as paint.",
+      "Two text sizes inside a drawer (14 and 12); rank comes from weight, case and reversal.",
+      "Authored single-stroke icon set on a 24px grid; no glyph or emoji icons.",
+      "Tools keep their width through every state, so rows never reflow."
+    ],
+    "rules": [
+      {
+        "name": "The Under-Layer Rule",
+        "body": "Yellow is never painted on top of the foam; it is what shows where the foam is cut away. It is reserved for launch/primary, focus, checked/selected/open and running. It is never a text color on foam.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Launch Per Slab Rule",
+        "body": "A slab, dialog or window has at most one primary (yellow) tool: Open all in the drawer header, Run in the Flutter window, Save in a dialog. Every other tool is a normal cut-out.",
+        "section": "colors"
+      },
+      {
+        "name": "The Red Means Remove Rule",
+        "body": "Red marks deletion, stopping and failure. Danger tools rest as ordinary cut-outs and only show their red floor on hover.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Sizes Rule",
+        "body": "A drawer uses exactly two text sizes, 14 and 12. Rank is expressed by weight (SemiBold vs Regular), case (caps vs mixed) and reversal (tape), never by a larger size.",
+        "section": "typography"
+      },
+      {
+        "name": "The Mono Is Data Rule",
+        "body": "Cascadia Mono is only for literal data: paths, commands, arguments, logs, and the running clock on a lifted tool. Never for labels or headings.",
+        "section": "typography"
+      },
+      {
+        "name": "The Caps Are For Tools Rule",
+        "body": "Tool labels are uppercase; a tool that is out (running) switches to mixed-case mono, so state change reads as a change of material, not just color.",
+        "section": "typography"
+      },
+      {
+        "name": "The Drop, Don't Squeeze Rule",
+        "body": "When a slab gets narrow, tools move below the info line as a group; they never shrink, truncate their labels, or overlap the path.",
+        "section": "layout"
+      },
+      {
+        "name": "The Reserved Width Rule",
+        "body": "A tool whose label changes with state reserves the width of its widest label up front (Start reserves \"Building 0:00\", \"Stopping 0:00\" and \"Running\" in mono), so rows never reflow when something starts or stops.",
+        "section": "layout"
+      },
+      {
+        "name": "The Slab And Cut Rule",
+        "body": "There are two depths: raised foam and recessed cut-outs. Nothing interactive is raised; nothing structural is recessed. Hover lightens a floor or pulls foam forward (`foam-hi`); it never adds a new shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do cut every interactive control into the foam: `cut` floor, shadowed top wall, lit bottom lip, 7px radius.",
+      "Do keep yellow for launch/primary, focus, checked/selected/open and running, and put only `on-yellow` ink on it.",
+      "Do show a running tool as an empty slot: yellow under-layer, dashed `yellow-wall` outline, mixed-case Cascadia Mono label with the elapsed time.",
+      "Do reserve the widest state label on any tool whose label changes, so rows never reflow.",
+      "Do keep a drawer to two text sizes (14px and 12px) and rank by weight, case and tape reversal.",
+      "Do drop tools below the info line when a slab is narrow instead of shrinking them.",
+      "Do draw new icons in the authored set: 24px grid, 1.8 stroke, round caps and joins, rendered in the tool's ink.",
+      "Do design both themes at once from the same tokens; light only changes the foam, never the yellow or the geometry."
+    ],
+    "donts": [
+      "Don't build grey panels with blue buttons; there is no blue in this system.",
+      "Don't use yellow as text color on foam, as decoration, or on more than one primary tool per slab or dialog.",
+      "Don't raise interactive controls off the foam or add new shadow styles; depth is slab-and-cut only.",
+      "Don't put anything but a project name on Dymo tape.",
+      "Don't add a third text size inside a drawer or use size to rank names.",
+      "Don't set labels or headings in Cascadia Mono; mono is for paths, commands, logs and the running clock.",
+      "Don't use Unicode glyphs, emoji or third-party icon fonts as icons.",
+      "Don't show red at rest on a danger tool; red appears on hover or for a real failure."
+    ]
+  }
+}

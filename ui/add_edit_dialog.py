@@ -1,453 +1,417 @@
-"""Add/Edit project dialog."""
+"""Add / edit a project: identity, main folder and its folders (sub-projects)."""
+
+from __future__ import annotations
 
 import os
 import uuid
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, simpledialog
 from pathlib import Path
+from typing import Optional
 from urllib.parse import urlparse
 
-from models.project import Project, SubProject, SubProjectCommand, ProjectType
-from ui.commands_dialog import CommandsDialog
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt
+from PySide6.QtGui import QIcon, QKeySequence, QPainter, QShortcut
+from PySide6.QtWidgets import (
+    QDialog, QFileDialog, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea,
+    QVBoxLayout, QWidget,
+)
+
+from models.project import Project, ProjectType, SubProject, SubProjectCommand
 from services.project_service import ProjectService
-from ui.icon_loader import load_icon
-from ui.theme import ThemeManager
+from ui import dialogs
+from ui.commands_dialog import CommandsDialog
+from ui.icon_loader import for_theme, load_icon, load_type_icon
+from ui.theme import RADIUS_SLOT, apply_title_bar, t
+from ui.widgets import Combo, FoamPanel, IconWell, ToolSlot, paint_cut
+
+TYPE_ORDER = [
+    ProjectType.FLUTTER, ProjectType.ADMIN_DASHBOARD, ProjectType.CLOUD_FUNCTION,
+    ProjectType.WEB_VERSION, ProjectType.DOCUMENTATION, ProjectType.GENERAL,
+    ProjectType.DATA_TXT, ProjectType.EXECUTE, ProjectType.LINK,
+]
 
 
-class AddEditDialog(tk.Toplevel):
-    """Modal dialog for adding or editing a project."""
+def _caps(text: str) -> QLabel:
+    label = QLabel(text.upper())
+    label.setProperty("role", "caps")
+    return label
 
-    def __init__(self, parent, project: Project | None = None, on_save=None):
+
+def _is_valid_url(s: str) -> bool:
+    try:
+        result = urlparse(s)
+        return all([result.scheme, result.netloc]) and result.scheme in ("http", "https")
+    except Exception:
+        return False
+
+
+class _FolderRow(FoamPanel):
+    """One folder (sub-project) being edited."""
+
+    def __init__(self, dialog: "ProjectDialog", sp: Optional[SubProject] = None, sp_type: ProjectType = ProjectType.GENERAL):
+        super().__init__(radius=10)
+        self._dialog = dialog
+        self.sp_id = sp.id if sp else None
+        self.commands: list[SubProjectCommand] = list(sp.commands) if sp else []
+
+        grid = QGridLayout(self)
+        grid.setContentsMargins(14, 12, 12, 16)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
+
+        self.number = QLabel("1")
+        self.number.setProperty("role", "dim")
+        self.number.setFixedWidth(18)
+        grid.addWidget(self.number, 0, 0)
+
+        self.type_box = Combo()
+        for pt in TYPE_ORDER:
+            pm = for_theme(load_type_icon(pt.value, 18))
+            self.type_box.addItem(QIcon(pm) if pm else QIcon(), ProjectType.display_name(pt), pt)
+        self.type_box.setIconSize(QSize(18, 18))
+        self.type_box.setFixedWidth(220)
+        current = sp.type if sp else sp_type
+        self.type_box.setCurrentIndex(TYPE_ORDER.index(current) if current in TYPE_ORDER else TYPE_ORDER.index(ProjectType.GENERAL))
+        self.type_box.currentIndexChanged.connect(self._type_changed)
+        grid.addWidget(self.type_box, 0, 1)
+
+        self.name = QLineEdit((sp.name or "") if sp else "")
+        self.name.setPlaceholderText("Name (optional, defaults to the folder name)")
+        grid.addWidget(self.name, 0, 2, 1, 3)
+
+        remove = ToolSlot("", "trash", variant="danger", tooltip="Remove this folder from the project")
+        remove.clicked.connect(lambda: dialog.remove_row(self))
+        grid.addWidget(remove, 0, 5)
+
+        self.path = QLineEdit(sp.directory if sp else "")
+        self.path.setProperty("mono", True)
+        grid.addWidget(self.path, 1, 1, 1, 2)
+        self.browse = ToolSlot("Folder", "folder")
+        self.browse.reserve("Folder", "File", "URL")  # Same width for every type: paths line up across rows
+        self.browse.clicked.connect(self._browse)
+        grid.addWidget(self.browse, 1, 3)
+        self.commands_btn = ToolSlot("", "run", tooltip="Terminal commands for this folder, e.g. npm run dev")
+        self.commands_btn.clicked.connect(self._edit_commands)
+        grid.addWidget(self.commands_btn, 1, 4, 1, 2)
+        grid.setColumnStretch(2, 1)
+        self._type_changed()
+        self._update_commands_btn()
+
+    def sp_type(self) -> ProjectType:
+        return self.type_box.currentData()
+
+    def _type_changed(self) -> None:
+        pt = self.sp_type()
+        if ProjectType.is_link_type(pt):
+            self.path.setPlaceholderText("https://example.com")
+            self.browse.setText("URL")
+            self.browse.set_icon_name("globe")
+        elif ProjectType.is_file_type(pt):
+            self.path.setPlaceholderText("C:/path/to/file")
+            self.browse.setText("File")
+            self.browse.set_icon_name("file")
+        else:
+            self.path.setPlaceholderText("C:/path/to/folder")
+            self.browse.setText("Folder")
+            self.browse.set_icon_name("folder")
+        self.commands_btn.setVisible(not ProjectType.is_link_type(pt))
+
+    def _browse(self) -> None:
+        pt = self.sp_type()
+        current = self.path.text().strip()
+        if pt == ProjectType.LINK:
+            url = dialogs.ask_text(self.window(), "Link", "URL to open in the browser:", current or "https://", mono=True)
+            if url:
+                self.path.setText(url.strip())
+            return
+        start = current if current and os.path.exists(current) else ""
+        if pt == ProjectType.DATA_TXT:
+            path, _ = QFileDialog.getOpenFileName(
+                self.window(), "Select a file to open in Notepad", start,
+                "All files (*.*);;Text files (*.txt *.md *.log *.csv);;"
+                "Config files (*.json *.yaml *.yml *.env *.ini *.xml *.toml)",
+            )
+        elif pt == ProjectType.EXECUTE:
+            path, _ = QFileDialog.getOpenFileName(self.window(), "Select a file to open or run", start, "All files (*.*)")
+        else:
+            path = QFileDialog.getExistingDirectory(self.window(), "Select project folder", start)
+        if path:
+            self.path.setText(path)
+
+    def _update_commands_btn(self) -> None:
+        n = len(self.commands)
+        self.commands_btn.setText(f"Commands · {n}" if n else "Add commands")
+
+    def _edit_commands(self) -> None:
+        label = self.name.text().strip() or Path(self.path.text().strip()).name or "folder"
+        result = CommandsDialog.edit(self.window(), self.commands, f"Commands: {label}")
+        if result is not None:
+            self.commands = result
+            self._update_commands_btn()
+
+
+class _IconChoice(QPushButton):
+    """A default icon in the picker: a pocket that fills yellow on hover."""
+
+    def __init__(self, path: Path):
+        super().__init__()
+        self.path = path
+        self._pm = load_icon(str(path), 44)
+        self.setFixedSize(68, 68)
+        self.setProperty("slot", True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip(path.stem.replace("_", " "))
+
+    def paintEvent(self, event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        hovered = self.underMouse() or self.hasFocus()
+        paint_cut(p, QRectF(self.rect()).adjusted(2, 2, -2, -2), RADIUS_SLOT + 3,
+                  t("yellow") if hovered else t("cut"), t("yellow_wall") if hovered else None)
+        if self._pm:
+            w = self._pm.width() / self._pm.devicePixelRatio()
+            h = self._pm.height() / self._pm.devicePixelRatio()
+            p.drawPixmap(QRectF((68 - w) / 2, (68 - h) / 2, w, h), self._pm, QRectF(self._pm.rect()))
+
+
+def pick_default_icon(parent: QWidget) -> Optional[str]:
+    """Grid of bundled icons. Returns "default_icon:<file>" or None."""
+    default_dir = ProjectService.default_icons_dir()
+    icons = sorted(
+        f for f in default_dir.iterdir() if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif")
+    ) if default_dir.exists() else []
+    if not icons:
+        dialogs.info(parent, "Default icons", "No default icons found.")
+        return None
+    dlg = QDialog(parent)
+    dlg.setWindowTitle("Choose a default icon")
+    root = QVBoxLayout(dlg)
+    root.setContentsMargins(20, 18, 20, 18)
+    root.setSpacing(12)
+    hint = QLabel("Click an icon to use it.")
+    hint.setProperty("role", "dim")
+    root.addWidget(hint)
+    grid = QGridLayout()
+    grid.setSpacing(6)
+    chosen: list[str] = []
+    for i, path in enumerate(icons):
+        btn = _IconChoice(path)
+        btn.clicked.connect(lambda _=False, p=path: (chosen.append(f"default_icon:{p.name}"), dlg.accept()))
+        grid.addWidget(btn, i // 6, i % 6)
+    root.addLayout(grid)
+    cancel = ToolSlot("Cancel")
+    cancel.clicked.connect(dlg.reject)
+    root.addWidget(cancel, 0, Qt.AlignmentFlag.AlignRight)
+    apply_title_bar(dlg)
+    dlg.exec()
+    return chosen[0] if chosen else None
+
+
+class ProjectDialog(QDialog):
+    """Modal editor for a new or existing project."""
+
+    def __init__(self, parent: Optional[QWidget], project: Optional[Project] = None):
         super().__init__(parent)
         self.project = project
-        self.on_save = on_save
-        self.result: Project | None = None
-
-        self.title("Edit Project" if project else "Add Project")
-        self.geometry("800x560")
-        self.transient(parent)
-        self.grab_set()
-
-        self._build_ui()
-        self._center_on_parent(parent)
+        self.result_project: Optional[Project] = None
+        self._rows: list[_FolderRow] = []
+        self.setWindowTitle("Edit project" if project else "Add project")
+        self.resize(940, 680)
+        self.setMinimumSize(760, 520)
+        self._build()
         if project:
-            self._load_project()
-
-        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
-
-    def _build_ui(self):
-        _c = ThemeManager().colors
-        self.configure(bg=_c["bg"])
-
-        main = ttk.Frame(self, padding=10)
-        main.pack(fill="both", expand=True)
-
-        ttk.Label(main, text="Project name:").grid(row=0, column=0, sticky="w", pady=2)
-        self._name_var = tk.StringVar()
-        self._name_entry = ttk.Entry(main, textvariable=self._name_var, width=40)
-        self._name_entry.grid(row=0, column=1, sticky="ew", padx=8, pady=2)
-
-        ttk.Label(main, text="Project icon (optional):").grid(
-            row=1, column=0, sticky="nw", pady=2
-        )
-        icon_section = ttk.Frame(main)
-        icon_section.grid(row=1, column=1, sticky="ew", padx=8, pady=2)
-
-        preview_frame = ttk.Frame(icon_section)
-        preview_frame.pack(side="left", padx=(0, 12))
-        self._icon_preview = tk.Label(preview_frame, text="(no icon)", width=8, height=3,
-                                      bg=_c["bg"], fg=_c["fg"])
-        self._icon_preview.pack()
-        self._icon_preview_image = None
-
-        icon_controls = ttk.Frame(icon_section)
-        icon_controls.pack(side="left", fill="x", expand=True)
-        self._icon_var = tk.StringVar()
-        self._icon_var.trace_add("write", lambda *_: self._update_icon_preview())
-        ttk.Entry(icon_controls, textvariable=self._icon_var, width=25).pack(
-            side="left", fill="x", expand=True
-        )
-        ttk.Button(icon_controls, text="Browse...", command=self._browse_icon).pack(
-            side="left", padx=2
-        )
-        ttk.Button(
-            icon_controls, text="Choose default...", command=self._choose_default_icon
-        ).pack(side="left", padx=2)
-
-        ttk.Label(main, text="Main Project Folder (optional):").grid(
-            row=2, column=0, sticky="w", pady=2
-        )
-        main_folder_frame = ttk.Frame(main)
-        main_folder_frame.grid(row=2, column=1, sticky="ew", padx=8, pady=2)
-        self._main_folder_var = tk.StringVar()
-        ttk.Entry(main_folder_frame, textvariable=self._main_folder_var, width=30).pack(
-            side="left", fill="x", expand=True
-        )
-        ttk.Button(
-            main_folder_frame, text="Browse...", command=self._browse_main_folder
-        ).pack(side="left", padx=4)
-
-        ttk.Separator(main, orient="horizontal").grid(
-            row=3, column=0, columnspan=2, sticky="ew", pady=10
-        )
-        sub_header = ttk.Frame(main)
-        sub_header.grid(row=4, column=0, columnspan=2, sticky="ew", pady=4)
-        ttk.Label(sub_header, text="Sub-projects:").pack(side="left")
-        ttk.Button(
-            sub_header,
-            text="+ Add sub-project",
-            command=lambda: self._add_sub_row(type_value="General"),
-        ).pack(side="right")
-
-        # Scrollable container for sub-projects
-        sub_container = ttk.Frame(main)
-        sub_container.grid(row=5, column=0, columnspan=2, sticky="nsew", pady=4)
-        self._sub_canvas = tk.Canvas(sub_container, highlightthickness=0, bg=_c["bg"])
-        self._sub_scrollbar = ttk.Scrollbar(sub_container, orient="vertical", command=self._sub_canvas.yview)
-        self._sub_frame = ttk.Frame(self._sub_canvas)
-        self._sub_frame.bind(
-            "<Configure>",
-            lambda e: self._sub_canvas.configure(scrollregion=self._sub_canvas.bbox("all")),
-        )
-        self._sub_canvas_window = self._sub_canvas.create_window((0, 0), window=self._sub_frame, anchor="nw")
-        self._sub_canvas.configure(yscrollcommand=self._sub_scrollbar.set)
-        self._sub_canvas.pack(side="left", fill="both", expand=True)
-        self._sub_scrollbar.pack(side="right", fill="y")
-        self._sub_canvas.bind("<Configure>", self._on_sub_canvas_configure)
-        for widget in (self._sub_frame, self._sub_canvas):
-            widget.bind("<MouseWheel>", self._on_sub_mousewheel)
-            widget.bind("<Button-4>", self._on_sub_mousewheel)  # Linux scroll up
-            widget.bind("<Button-5>", self._on_sub_mousewheel)  # Linux scroll down
-
-        # (row, num_label, name_var, dir_var, type_var, commands, sub_project_id)
-        self._sub_rows: list[tuple] = []
-
-        main.rowconfigure(5, weight=1)
-        btn_frame = ttk.Frame(main)
-        btn_frame.grid(row=6, column=0, columnspan=2, pady=20)
-        ttk.Button(btn_frame, text="Save", command=self._on_save).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Cancel", command=self._on_cancel).pack(side="left", padx=4)
-
-        main.columnconfigure(1, weight=1)
-        self._update_icon_preview()
-
-    def _on_sub_canvas_configure(self, event) -> None:
-        """Keep inner frame width matched to canvas."""
-        self._sub_canvas.itemconfig(self._sub_canvas_window, width=event.width)
-
-    def _on_sub_mousewheel(self, event) -> None:
-        """Scroll sub-projects with mouse wheel."""
-        num = getattr(event, "num", None)
-        if num == 4:  # Linux scroll up
-            self._sub_canvas.yview_scroll(-1, "units")
-        elif num == 5:  # Linux scroll down
-            self._sub_canvas.yview_scroll(1, "units")
-        else:  # Windows, macOS
-            delta = getattr(event, "delta", 0)
-            self._sub_canvas.yview_scroll(int(-1 * (delta / 120)), "units")
-
-    def _center_on_parent(self, parent: tk.Tk | tk.Toplevel) -> None:
-        """Position this dialog centered over the parent window."""
-        self.update_idletasks()
-        pw = parent.winfo_width()
-        ph = parent.winfo_height()
-        px = parent.winfo_rootx()
-        py = parent.winfo_rooty()
-        dw, dh = 800, 560
-        sw = parent.winfo_screenwidth()
-        sh = parent.winfo_screenheight()
-        if pw > 50 and ph > 50:
-            x = px + (pw - dw) // 2
-            y = py + (ph - dh) // 2
+            self._load(project)
         else:
-            x = (sw - dw) // 2
-            y = (sh - dh) // 2
-        x = max(0, min(x, sw - dw))
-        y = max(0, min(y, sh - dh))
-        self.geometry(f"{dw}x{dh}+{x}+{y}")
+            self._add_row(focus=False)
+        self._name.setFocus()
+        QShortcut(QKeySequence("Ctrl+S"), self, self._on_save)
+        QShortcut(QKeySequence("Ctrl+Return"), self, self._on_save)
 
-    def _load_project(self):
-        self._name_var.set(self.project.name)
-        self._icon_var.set(self.project.icon_path or "")
-        self._main_folder_var.set(self.project.main_project_folder or "")
-        for sp in self.project.sub_projects:
-            self._add_sub_row(
-                directory=sp.directory,
-                type_value=ProjectType.display_name(sp.type),
-                sub_project_id=sp.id,
-                name=sp.name or "",
-                commands=list(sp.commands),
-            )
+    def showEvent(self, event) -> None:
+        apply_title_bar(self)
+        super().showEvent(event)
 
-    def _renumber_sub_rows(self) -> None:
-        """Update the number labels for all sub-project rows."""
-        for i, (row, num_label, *_) in enumerate(self._sub_rows, start=1):
-            num_label.config(text=str(i))
+    def _build(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(22, 20, 22, 18)
+        root.setSpacing(14)
 
-    def _add_sub_row(
-        self,
-        directory: str = "",
-        type_value: str = "general",
-        sub_project_id: str | None = None,
-        name: str = "",
-        commands: list[SubProjectCommand] | None = None,
-    ):
-        row = ttk.Frame(self._sub_frame)
-        row.pack(fill="x", pady=2)
+        identity = FoamPanel()
+        grid = QGridLayout(identity)
+        grid.setContentsMargins(18, 16, 18, 20)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(10)
 
-        name_var = tk.StringVar(value=name)
-        dir_var = tk.StringVar(value=directory)
-        type_var = tk.StringVar(value=type_value)
-        commands = list(commands or [])  # Edited in place by the Commands popup
-        row._sp_id = sub_project_id  # Preserve id when editing
+        icon_col = QVBoxLayout()
+        icon_col.setSpacing(6)
+        self._preview = IconWell(88, fallback="image")
+        icon_col.addWidget(self._preview, 0, Qt.AlignmentFlag.AlignHCenter)
+        icon_buttons = QHBoxLayout()
+        icon_buttons.setSpacing(2)
+        browse_icon = ToolSlot("", "image", compact=True, tooltip="Choose an image file")
+        browse_icon.clicked.connect(self._browse_icon)
+        default_icon = ToolSlot("", "grid", compact=True, tooltip="Choose a default icon")
+        default_icon.clicked.connect(self._choose_default_icon)
+        clear_icon = ToolSlot("", "close", compact=True, variant="quiet", tooltip="Remove the icon")
+        clear_icon.clicked.connect(lambda: self._icon.setText(""))
+        for b in (browse_icon, default_icon, clear_icon):
+            icon_buttons.addWidget(b)
+        icon_col.addLayout(icon_buttons)
+        icon_col.addStretch()
+        grid.addLayout(icon_col, 0, 0, 3, 1)
 
-        num_label = ttk.Label(row, text="1", width=3, anchor="e")
-        num_label.pack(side="left", padx=(0, 4))
+        self._name = QLineEdit()
+        self._name.setPlaceholderText("e.g. Hello Teacher")
+        grid.addWidget(_caps("Project name"), 0, 1)
+        grid.addWidget(self._name, 0, 2, 1, 2)
 
-        ttk.Label(row, text="Name:", width=5).pack(side="left", padx=(0, 2))
-        ttk.Entry(row, textvariable=name_var, width=18).pack(side="left", padx=(0, 4))
+        self._icon = QLineEdit()
+        self._icon.setProperty("mono", True)
+        self._icon.setPlaceholderText("optional: image file or a default icon")
+        self._icon.textChanged.connect(self._update_preview)
+        grid.addWidget(_caps("Icon"), 1, 1)
+        grid.addWidget(self._icon, 1, 2, 1, 2)
 
-        ttk.Button(
-            row, text="Browse...", width=8,
-            command=lambda: self._browse_path(dir_var, type_var),
-        ).pack(side="left", padx=(0, 4))
-        ttk.Entry(row, textvariable=dir_var, width=28).pack(side="left", fill="x", expand=True, padx=4)
+        self._main_folder = QLineEdit()
+        self._main_folder.setProperty("mono", True)
+        self._main_folder.setPlaceholderText("optional: opens in Explorer, terminal, tasks and launch")
+        browse_main = ToolSlot("Browse", "folder")
+        browse_main.clicked.connect(self._browse_main_folder)
+        grid.addWidget(_caps("Main folder"), 2, 1)
+        grid.addWidget(self._main_folder, 2, 2)
+        grid.addWidget(browse_main, 2, 3)
+        grid.setColumnStretch(2, 1)
+        root.addWidget(identity)
 
-        type_combo = ttk.Combobox(
-            row,
-            textvariable=type_var,
-            values=[
-                ProjectType.display_name(ProjectType.FLUTTER),
-                ProjectType.display_name(ProjectType.ADMIN_DASHBOARD),
-                ProjectType.display_name(ProjectType.CLOUD_FUNCTION),
-                ProjectType.display_name(ProjectType.WEB_VERSION),
-                ProjectType.display_name(ProjectType.DOCUMENTATION),
-                ProjectType.display_name(ProjectType.GENERAL),
-                ProjectType.display_name(ProjectType.DATA_TXT),
-                ProjectType.display_name(ProjectType.EXECUTE),
-                ProjectType.display_name(ProjectType.LINK),
-            ],
-            state="readonly",
-            width=18,
-        )
-        type_combo.pack(side="left", padx=4)
+        head = QHBoxLayout()
+        self._folders_label = _caps("Folders")
+        head.addWidget(self._folders_label)
+        head.addStretch()
+        add = ToolSlot("Add folder", "plus")
+        add.clicked.connect(lambda: self._add_row(focus=True))
+        head.addWidget(add)
+        root.addLayout(head)
 
-        def remove():
-            row.destroy()
-            self._sub_rows[:] = [r for r in self._sub_rows if r[0] != row]
-            self._renumber_sub_rows()
+        self._list = QVBoxLayout()
+        self._list.setContentsMargins(0, 0, 0, 0)
+        self._list.setSpacing(4)
+        self._list.addStretch()
+        holder = QWidget()
+        holder.setLayout(self._list)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setWidget(holder)
+        self._scroll = scroll
+        root.addWidget(scroll, 1)
 
-        # Optional terminal commands (e.g. npm run dev), edited in a popup to keep rows compact
-        commands_btn = ttk.Button(row, width=14)
-        commands_btn.pack(side="left", padx=4)
+        footer = QHBoxLayout()
+        keys = QLabel("Ctrl+S saves · Esc cancels")
+        keys.setProperty("role", "dim")
+        footer.addWidget(keys)
+        footer.addStretch()
+        cancel = ToolSlot("Cancel")
+        cancel.clicked.connect(self.reject)
+        save = ToolSlot("Save project", "check", variant="primary")
+        save.setDefault(True)  # Enter in any field saves
+        save.clicked.connect(self._on_save)
+        footer.addWidget(cancel)
+        footer.addWidget(save)
+        root.addLayout(footer)
+        self._update_preview()
 
-        def update_commands_btn():
-            commands_btn.config(
-                text=f"Commands ({len(commands)})" if commands else "+ Commands"
-            )
+    def _load(self, project: Project) -> None:
+        self._name.setText(project.name)
+        self._icon.setText(project.icon_path or "")
+        self._main_folder.setText(project.main_project_folder or "")
+        for sp in project.sub_projects:
+            self._add_row(sp)
 
-        def set_commands(new_commands: list[SubProjectCommand]):
-            commands[:] = new_commands
-            update_commands_btn()
+    def _add_row(self, sp: Optional[SubProject] = None, focus: bool = False) -> None:
+        row = _FolderRow(self, sp)
+        self._list.insertWidget(self._list.count() - 1, row)
+        self._rows.append(row)
+        self._renumber()
+        if focus:
+            row.path.setFocus()
+            self._scroll.ensureWidgetVisible(row)
 
-        def edit_commands():
-            label = name_var.get().strip() or Path(dir_var.get().strip()).name or "sub-project"
-            CommandsDialog(self, commands, title=f"Commands: {label}", on_save=set_commands)
+    def remove_row(self, row: _FolderRow) -> None:
+        self._rows.remove(row)
+        row.deleteLater()
+        self._renumber()
 
-        commands_btn.config(command=edit_commands)
-        update_commands_btn()
+    def _renumber(self) -> None:
+        for i, row in enumerate(self._rows, start=1):
+            row.number.setText(str(i))
+        n = len(self._rows)
+        self._folders_label.setText(f"FOLDERS · {n}" if n else "FOLDERS")
 
-        ttk.Button(row, text="Remove", command=remove).pack(side="left", padx=4)
+    def _update_preview(self) -> None:
+        path = self._icon.text().strip() or None
+        self._preview.set_pixmap(load_icon(path, 64) if path else None)
 
-        self._sub_rows.append(
-            (row, num_label, name_var, dir_var, type_var, commands, sub_project_id)
-        )
-        self._renumber_sub_rows()
-
-    def _browse_path(self, path_var: tk.StringVar, type_var: tk.StringVar):
-        display = type_var.get()
-        if display == ProjectType.display_name(ProjectType.LINK):
-            url = simpledialog.askstring(
-                "Enter URL",
-                "Enter the URL to open in browser:",
-                initialvalue=path_var.get() or "https://",
-            )
-            if url:
-                path_var.set(url.strip())
-            return
-
-        if display == ProjectType.display_name(ProjectType.DATA_TXT):
-            path = filedialog.askopenfilename(
-                title="Select file to open in Notepad",
-                filetypes=[
-                    ("All files", "*.*"),
-                    ("Text files", "*.txt *.md *.log *.csv"),
-                    ("Config files", "*.json *.yaml *.yml *.env *.ini *.xml *.toml"),
-                ],
-            )
-        elif display == ProjectType.display_name(ProjectType.EXECUTE):
-            path = filedialog.askopenfilename(
-                title="Select file to open or run",
-                filetypes=[("All files", "*.*")],
-            )
-        else:
-            # Flutter, Admin Dashboard, etc.: folder opens in Cursor / VS Code (file picker cannot select folders)
-            path = filedialog.askdirectory(title="Select project folder")
+    def _browse_icon(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Select project icon", "", "Images (*.png *.jpg *.jpeg *.gif *.ico *.bmp);;All files (*.*)")
         if path:
-            path_var.set(path)
+            self._icon.setText(path)
 
-    def _update_icon_preview(self) -> None:
-        """Update the icon preview based on current icon_path."""
-        path = self._icon_var.get().strip() or None
-        self._icon_preview_image = None
+    def _choose_default_icon(self) -> None:
+        chosen = pick_default_icon(self)
+        if chosen:
+            self._icon.setText(chosen)
+
+    def _browse_main_folder(self) -> None:
+        current = self._main_folder.text().strip()
+        path = QFileDialog.getExistingDirectory(self, "Select main project folder", current if os.path.isdir(current) else "")
         if path:
-            resolved = ProjectService.resolve_icon_path(path)
-            if resolved:
-                img = load_icon(str(resolved), (48, 48))
-                if img:
-                    self._icon_preview_image = img
-                    self._icon_preview.config(image=img, text="")
-                    return
-        self._icon_preview.config(image="", text="(no icon)")
+            self._main_folder.setText(path)
 
-    def _browse_icon(self):
-        path = filedialog.askopenfilename(
-            title="Select project icon",
-            filetypes=[("Images", "*.png *.jpg *.jpeg *.gif"), ("All", "*.*")],
-        )
-        if path:
-            self._icon_var.set(path)
-
-    def _choose_default_icon(self):
-        """Open a popup to choose from default icons."""
-        default_dir = ProjectService.default_icons_dir()
-        if not default_dir.exists():
-            messagebox.showinfo("Default Icons", "No default icons found.")
-            return
-
-        icons = sorted(
-            f for f in default_dir.iterdir()
-            if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif")
-        )
-        if not icons:
-            messagebox.showinfo("Default Icons", "No default icons found.")
-            return
-
-        popup = tk.Toplevel(self)
-        popup.title("Choose default icon")
-        popup.transient(self)
-        popup.grab_set()
-        c = ThemeManager().colors
-        popup.configure(bg=c["bg"])
-
-        inner = ttk.Frame(popup, padding=10)
-        inner.pack()
-
-        ttk.Label(inner, text="Click an icon to select:").pack(anchor="w", pady=(0, 8))
-
-        grid_frame = ttk.Frame(inner)
-        grid_frame.pack()
-
-        for i, icon_path in enumerate(icons):
-            row, col = i // 6, i % 6
-            img = load_icon(str(icon_path), (40, 40))
-            if img:
-                btn = tk.Button(
-                    grid_frame, image=img, cursor="hand2",
-                    command=lambda p=icon_path: self._on_default_icon_selected(popup, p),
-                    bg=c["bg"], activebackground=c["select_bg"],
-                    relief="flat", bd=1,
-                )
-                btn.image = img
-                btn.grid(row=row, column=col, padx=4, pady=4)
-
-        def on_cancel():
-            popup.grab_release()
-            popup.destroy()
-
-        ttk.Button(inner, text="Cancel", command=on_cancel).pack(pady=(12, 0))
-        popup.protocol("WM_DELETE_WINDOW", on_cancel)
-
-    def _on_default_icon_selected(self, popup: tk.Toplevel, icon_path: Path) -> None:
-        """Store default icon as default_icon:filename and close popup."""
-        self._icon_var.set(f"default_icon:{icon_path.name}")
-        popup.grab_release()
-        popup.destroy()
-
-    def _browse_main_folder(self):
-        path = filedialog.askdirectory(title="Select main project folder")
-        if path:
-            self._main_folder_var.set(path)
-
-    def _display_to_type(self, display: str) -> ProjectType:
-        for pt in ProjectType:
-            if ProjectType.display_name(pt) == display:
-                return pt
-        return ProjectType.GENERAL
-
-    def _is_valid_url(self, s: str) -> bool:
-        """Check if string is a valid URL."""
-        try:
-            result = urlparse(s)
-            return all([result.scheme, result.netloc]) and result.scheme in ("http", "https")
-        except Exception:
-            return False
-
-    def _on_save(self):
-        name = self._name_var.get().strip()
+    def _on_save(self) -> None:
+        name = self._name.text().strip()
         if not name:
-            messagebox.showerror("Error", "Project name is required.")
+            dialogs.error(self, "Project name", "Give the project a name.")
+            self._name.setFocus()
             return
-
-        icon_path = self._icon_var.get().strip() or None
-        main_project_folder = self._main_folder_var.get().strip() or None
 
         sub_projects = []
-        for row, num_label, name_var, dir_var, type_var, commands, sp_id in self._sub_rows:
-            d = dir_var.get().strip()
+        for row in self._rows:
+            d = row.path.text().strip()
             if not d:
                 continue
-            t = self._display_to_type(type_var.get() or "General")
-            if t == ProjectType.LINK and not self._is_valid_url(d):
-                messagebox.showerror(
-                    "Invalid URL",
-                    f"Please enter a valid URL (e.g. https://example.com) for the Link type.\n\nGot: {d[:50]}{'...' if len(d) > 50 else ''}",
+            pt = row.sp_type()
+            if pt == ProjectType.LINK and not _is_valid_url(d):
+                dialogs.error(
+                    self, "Invalid URL",
+                    "Enter a full URL (e.g. https://example.com) for the Link type.\n\n"
+                    f"Got: {d[:50]}{'…' if len(d) > 50 else ''}",
                 )
+                row.path.setFocus()
                 return
-            if t == ProjectType.EXECUTE and not os.path.isfile(d):
-                messagebox.showerror(
-                    "Invalid file",
-                    "Execute / Open file requires an existing file path.",
-                )
+            if pt == ProjectType.EXECUTE and not os.path.isfile(d):
+                dialogs.error(self, "Invalid file", "Execute / Open file needs an existing file path.")
+                row.path.setFocus()
                 return
-            custom_name = name_var.get().strip() or None
-            sub_projects.append(
-                SubProject(
-                    id=sp_id or str(uuid.uuid4()),
-                    directory=d,
-                    type=t,
-                    name=custom_name,
-                    commands=list(commands),
-                )
-            )
+            sub_projects.append(SubProject(
+                id=row.sp_id or str(uuid.uuid4()),
+                directory=d,
+                type=pt,
+                name=row.name.text().strip() or None,
+                commands=list(row.commands),
+            ))
 
-        project_id = self.project.id if self.project else str(uuid.uuid4())
-        open_count = self.project.open_count if self.project else 0
-        self.result = Project(
-            id=project_id,
+        self.result_project = Project(
+            id=self.project.id if self.project else str(uuid.uuid4()),
             name=name,
-            icon_path=icon_path,
-            main_project_folder=main_project_folder,
+            icon_path=self._icon.text().strip() or None,
+            main_project_folder=self._main_folder.text().strip() or None,
             sub_projects=sub_projects,
-            open_count=open_count,
+            open_count=self.project.open_count if self.project else 0,
         )
+        self.accept()
 
-        if self.on_save:
-            self.on_save(self.result)
-        self.grab_release()
-        self.destroy()
-
-    def _on_cancel(self):
-        self.result = None
-        self.grab_release()
-        self.destroy()
+    @classmethod
+    def edit(cls, parent: Optional[QWidget], project: Optional[Project] = None) -> Optional[Project]:
+        """Show the editor; the saved project, or None if cancelled."""
+        dlg = cls(parent, project)
+        return dlg.result_project if dlg.exec() == QDialog.DialogCode.Accepted else None

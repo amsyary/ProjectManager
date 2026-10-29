@@ -1,124 +1,124 @@
-"""Popup for editing a sub-project's terminal commands (e.g. npm run dev, npm run build)."""
+"""Dialog for editing a sub-project's terminal commands (e.g. npm run dev, npm run build)."""
 
-import tkinter as tk
-from tkinter import ttk, messagebox
-from typing import Callable
+from typing import Optional
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QCheckBox, QDialog, QHBoxLayout, QLabel, QLineEdit, QScrollArea, QVBoxLayout, QWidget,
+)
 
 from models.project import SubProjectCommand
-from ui.theme import ThemeManager
+from ui import dialogs
+from ui.theme import apply_title_bar
+from ui.widgets import FoamPanel, ToolSlot
 
 
-class CommandsDialog(tk.Toplevel):
+class _CommandRow(FoamPanel):
+    def __init__(self, on_remove, name: str = "", command: str = "", run_on_open: bool = False):
+        super().__init__(radius=10)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 10, 10, 14)
+        layout.setSpacing(8)
+        self.name = QLineEdit(name)
+        self.name.setPlaceholderText("Name (optional)")
+        self.name.setFixedWidth(170)
+        self.command = QLineEdit(command)
+        self.command.setPlaceholderText("npm run dev")
+        self.command.setProperty("mono", True)
+        self.run_on_open = QCheckBox("Run when opened")
+        self.run_on_open.setChecked(run_on_open)
+        self.run_on_open.setToolTip("Also start this command when the folder is opened (Open / Open all)")
+        remove = ToolSlot("", "trash", variant="danger", tooltip="Remove this command")
+        remove.clicked.connect(lambda: on_remove(self))
+        layout.addWidget(self.name)
+        layout.addWidget(self.command, 1)
+        layout.addWidget(self.run_on_open)
+        layout.addWidget(remove)
+
+
+class CommandsDialog(QDialog):
     """Modal list editor: each command has a name, the command line, and a Run-when-opened flag."""
 
-    def __init__(
-        self,
-        parent,
-        commands: list[SubProjectCommand],
-        title: str = "Commands",
-        on_save: Callable[[list[SubProjectCommand]], None] | None = None,
-    ):
+    def __init__(self, parent: Optional[QWidget], commands: list[SubProjectCommand], title: str = "Commands"):
         super().__init__(parent)
-        self.on_save = on_save
-        self.title(title)
-        self.transient(parent)
-        self.grab_set()
-        self.configure(bg=ThemeManager().colors["bg"])
+        self.setWindowTitle(title)
+        self.resize(760, 420)
+        self.setMinimumSize(560, 300)
+        self._rows: list[_CommandRow] = []
 
-        # (row, name_var, command_var, run_on_open_var)
-        self._rows: list[tuple[ttk.Frame, tk.StringVar, tk.StringVar, tk.BooleanVar]] = []
-        self._build_ui()
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 18, 20, 18)
+        root.setSpacing(12)
+        intro = QLabel("Commands run in a terminal inside the folder. Name them to keep the Run menu short.")
+        intro.setProperty("role", "dim")
+        intro.setWordWrap(True)
+        root.addWidget(intro)
+
+        self._list = QVBoxLayout()
+        self._list.setContentsMargins(0, 0, 0, 0)
+        self._list.setSpacing(6)
+        self._list.addStretch()
+        holder = QWidget()
+        holder.setLayout(self._list)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(holder)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        root.addWidget(scroll, 1)
+
+        add = ToolSlot("Add command", "plus")
+        add.clicked.connect(lambda: self._add_row(focus=True))
+        root.addWidget(add, 0, Qt.AlignmentFlag.AlignLeft)
+
+        footer = QHBoxLayout()
+        footer.addStretch()
+        cancel = ToolSlot("Cancel")
+        cancel.clicked.connect(self.reject)
+        save = ToolSlot("Save commands", "check", variant="primary")
+        save.setDefault(True)  # Enter in any field saves
+        save.clicked.connect(self._on_save)
+        footer.addWidget(cancel)
+        footer.addWidget(save)
+        root.addLayout(footer)
+
         for c in commands:
             self._add_row(c.name or "", c.command, c.run_on_open)
         if not commands:
-            self._add_row()
+            self._add_row(focus=True)
+        self.result_commands: Optional[list[SubProjectCommand]] = None
 
-        self._center_on_parent(parent)
-        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+    def showEvent(self, event) -> None:
+        apply_title_bar(self)
+        super().showEvent(event)
 
-    def _build_ui(self):
-        main = ttk.Frame(self, padding=10)
-        main.pack(fill="both", expand=True)
+    def _add_row(self, name: str = "", command: str = "", run_on_open: bool = False, focus: bool = False) -> None:
+        row = _CommandRow(self._remove_row, name, command, run_on_open)
+        self._list.insertWidget(self._list.count() - 1, row)
+        self._rows.append(row)
+        if focus:
+            row.command.setFocus()
 
-        ttk.Label(
-            main,
-            text="Commands run in a terminal inside the sub-project folder.",
-        ).pack(anchor="w", pady=(0, 6))
+    def _remove_row(self, row: _CommandRow) -> None:
+        self._rows.remove(row)
+        row.deleteLater()
 
-        header = ttk.Frame(main)
-        header.pack(fill="x")
-        ttk.Label(header, text="Name (optional)", width=20).pack(side="left", padx=(0, 4))
-        ttk.Label(header, text="Command").pack(side="left", padx=4)
-
-        self._rows_frame = ttk.Frame(main)
-        self._rows_frame.pack(fill="both", expand=True, pady=4)
-
-        ttk.Button(main, text="+ Add command", command=self._add_row).pack(anchor="w", pady=(4, 0))
-
-        btn_frame = ttk.Frame(main)
-        btn_frame.pack(pady=(12, 0))
-        ttk.Button(btn_frame, text="Save", command=self._on_save).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Cancel", command=self._on_cancel).pack(side="left", padx=4)
-
-    def _add_row(self, name: str = "", command: str = "", run_on_open: bool = False):
-        row = ttk.Frame(self._rows_frame)
-        row.pack(fill="x", pady=2)
-
-        name_var = tk.StringVar(value=name)
-        command_var = tk.StringVar(value=command)
-        run_on_open_var = tk.BooleanVar(value=run_on_open)
-
-        ttk.Entry(row, textvariable=name_var, width=20).pack(side="left", padx=(0, 4))
-        command_entry = ttk.Entry(row, textvariable=command_var, width=40)
-        command_entry.pack(side="left", fill="x", expand=True, padx=4)
-        ttk.Checkbutton(row, text="Run when opened", variable=run_on_open_var).pack(
-            side="left", padx=4
-        )
-
-        def remove():
-            row.destroy()
-            self._rows[:] = [r for r in self._rows if r[0] != row]
-
-        ttk.Button(row, text="Remove", command=remove).pack(side="left", padx=4)
-
-        self._rows.append((row, name_var, command_var, run_on_open_var))
-        command_entry.focus_set()
-
-    def _center_on_parent(self, parent: tk.Tk | tk.Toplevel) -> None:
-        """Position this dialog centered over the parent window."""
-        self.update_idletasks()
-        dw = max(self.winfo_reqwidth(), 640)
-        dh = self.winfo_reqheight() + 120  # room for a few more rows
-        x = parent.winfo_rootx() + (parent.winfo_width() - dw) // 2
-        y = parent.winfo_rooty() + (parent.winfo_height() - dh) // 2
-        self.geometry(f"{dw}x{dh}+{max(0, x)}+{max(0, y)}")
-
-    def _on_save(self):
+    def _on_save(self) -> None:
         commands = []
-        for _, name_var, command_var, run_on_open_var in self._rows:
-            command = command_var.get().strip()
-            name = name_var.get().strip() or None
+        for row in self._rows:
+            command = row.command.text().strip()
+            name = row.name.text().strip() or None
             if not command:
                 if name:
-                    messagebox.showerror(
-                        "Missing command", f'"{name}" has no command.', parent=self
-                    )
+                    dialogs.error(self, "Missing command", f'"{name}" has no command.')
+                    row.command.setFocus()
                     return
                 continue
-            commands.append(
-                SubProjectCommand(command=command, name=name, run_on_open=run_on_open_var.get())
-            )
-        if self.on_save:
-            self.on_save(commands)
-        self._close()
+            commands.append(SubProjectCommand(command=command, name=name, run_on_open=row.run_on_open.isChecked()))
+        self.result_commands = commands
+        self.accept()
 
-    def _on_cancel(self):
-        self._close()
-
-    def _close(self):
-        """Close and hand the modal grab back to the parent dialog."""
-        self.grab_release()
-        parent = self.master
-        self.destroy()
-        if isinstance(parent, tk.Toplevel) and parent.winfo_exists():
-            parent.grab_set()
+    @classmethod
+    def edit(cls, parent: Optional[QWidget], commands: list[SubProjectCommand], title: str) -> Optional[list[SubProjectCommand]]:
+        """Show the dialog; the new list on Save, None on Cancel."""
+        dlg = cls(parent, commands, title)
+        return dlg.result_commands if dlg.exec() == QDialog.DialogCode.Accepted else None
