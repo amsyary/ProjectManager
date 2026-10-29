@@ -6,6 +6,15 @@ Built with Python and PySide6 (Qt 6).
 
 ![Project Manager, dark theme](docs/screenshots/main-dark.png)
 
+## Download
+
+Get the latest version from the [Releases page](https://github.com/amsyary/ProjectManager/releases/latest):
+
+- **`ProjectManager-Setup-x.y.z-x64.exe`**: the installer. It installs for your user only (no admin rights needed) and adds a Start-menu entry, an optional desktop shortcut and an uninstaller. Running a newer installer upgrades in place and keeps your projects and settings.
+- **`ProjectManager-x.y.z-portable-x64.exe`**: a single file, nothing installed. It keeps its `data` and `config` folders next to itself.
+
+Requires Windows 10 or 11 (64-bit); Windows on ARM runs it under x64 emulation. The downloads are not code-signed yet, so SmartScreen may warn on first run: choose **More info → Run anyway**.
+
 ## Purpose
 
 Instead of navigating folders or remembering paths, open the app, type a few letters of the project name, and launch what you need: Cursor, VS Code or Antigravity, a terminal in your preferred shell, a saved command, a VS Code task, a launch configuration, or a full Flutter run with hot reload.
@@ -69,6 +78,26 @@ The executable will be in `dist/ProjectManager.exe`. The exe keeps its own `data
 
 Or use the VS Code task: **Terminal → Run Task → Build: Windows executable**
 
+To build the installer locally, build the folder version, then compile the Inno Setup script (needs [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
+
+```powershell
+$env:PM_ONEDIR = "1"; py -m PyInstaller --clean --noconfirm ProjectManager.spec; $env:PM_ONEDIR = $null
+iscc /DAppVersion=1.0.0 installer\ProjectManager.iss
+```
+
+The installer lands in `installer/Output/`.
+
+## Releasing
+
+Releases are built by GitHub Actions ([.github/workflows/release.yml](.github/workflows/release.yml)). To publish one, push a version tag:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The workflow builds the portable exe and the installer on Windows, smoke-tests the app, and publishes a GitHub Release with both files and a `SHA256SUMS.txt`. Pull requests and manual runs (Actions → Build and release → Run workflow) build the same files as downloadable artifacts without publishing a release.
+
 ## Usage
 
 1. **Add a project** – Click "Add project" (or Ctrl+N), enter a name, optionally pick an icon (an image file or one of the default icons) and a main folder, then add its folders with a type each.
@@ -83,7 +112,9 @@ ProjectManager/
 ├── main.py              # Entry point
 ├── config/              # Settings (editor, terminal, theme, Flutter run settings)
 ├── data/                # Projects and snippets (projects.json)
-├── assets/icons/        # Folder type icons and default project icons
+├── assets/              # App icon (app.ico), folder type icons, default project icons
+├── installer/           # Inno Setup script for the Windows installer
+├── .github/workflows/   # Build and release workflow
 ├── models/              # Data models
 ├── services/            # Launchers, VS Code tasks/launch parsing, Flutter runner, scrcpy
 ├── ui/                  # PySide6 UI (theme.py holds the design tokens)

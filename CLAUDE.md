@@ -20,3 +20,10 @@ py -m PyInstaller --clean --noconfirm ProjectManager.spec
 - Design direction and tokens live in `ui/theme.py`; the design system is documented in DESIGN.md (product context in PRODUCT.md).
 - The exe keeps its own data in `dist\data\` and `dist\config\`. Running from source uses the repo's `data\` and `config\`. They are separate.
 - `dist/` and `build/` are git-ignored; builds are never committed.
+- `ProjectManager.spec` never bundles `config/` or `data/` (they hold personal projects and are created next to the exe on first run). Don't add them back: public releases would ship them.
+
+## Releases
+
+- `.github/workflows/release.yml` builds on Windows: the one-file portable exe, the folder build (`PM_ONEDIR=1`), then the Inno Setup installer from `installer/ProjectManager.iss`. A pushed `v*` tag publishes a GitHub Release; PRs and manual runs only upload artifacts.
+- The installer is per-user (`%LOCALAPPDATA%\Programs\Project Manager`, no admin) because the app writes `data/` and `config/` next to its exe. Don't switch it to Program Files.
+- Pushing a tag publishes a public release: only do it when the user asks.
