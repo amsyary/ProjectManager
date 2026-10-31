@@ -1,42 +1,152 @@
-"""Window that runs a Flutter app like VS Code: pick device and mode, hot reload/restart, toggles."""
+"""Window that runs a Flutter app like VS Code: pick devices and mode, hot reload/restart, toggles.
+
+The runs themselves belong to the RunManager: they keep going in the background when this
+window is closed, and the window shows them again when it is reopened.
+"""
 
 from __future__ import annotations
 
-import queue
 import shlex
-import threading
-import time
 from typing import Optional
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QIcon, QKeySequence, QShortcut, QTextCharFormat, QTextCursor
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
+    QButtonGroup, QCheckBox, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QScrollArea,
     QSizePolicy, QVBoxLayout, QWidget,
 )
 
+from services.flutter_runner import TOGGLES, FlutterDevice, detect_flavors, find_flutter
 from services.project_service import ProjectService
-from services.flutter_runner import (
-    TOGGLES, STOP_GRACE_SECONDS, FlutterDevice, FlutterError, FlutterSession,
-    detect_flavors, find_flutter, list_devices,
-)
-from services.vscode_launch import (
-    FLUTTER_MODES, FlutterRunSettings, LaunchConfig, LaunchError, LaunchFile, flutter_settings,
-)
+from services.vscode_launch import FLUTTER_MODES, FlutterRunSettings, LaunchError, LaunchFile, flutter_settings
 from ui import dialogs
 from ui.icon_loader import load_icon
-from ui.theme import SIZE_META, Theme, apply_title_bar, mono_font, t
+from ui.log_view import Line, LogView
+from ui.run_manager import CUSTOM, NOT_FOUND, RunManager, flavor_problem, flutter_configs, saved_run
+from ui.theme import apply_title_bar
 from ui.widgets import Combo, DymoLabel, FoamPanel, IconWell, ScanBar, StatusLamp, ToolSlot
 
-POLL_MS = 100
-MAX_LOG_LINES = 5000
-CUSTOM = "Custom"
+STATUS_MS = 250
 
 
 def _caps(text: str) -> QLabel:
     label = QLabel(text.upper())
     label.setProperty("role", "caps")
     return label
+
+
+def rename_device(parent: QWidget, device_id: str, model: str) -> None:
+    """Ask for a name that tells this device apart (two phones of the same model, say)."""
+    manager = RunManager.get()
+    name = dialogs.ask_text(
+        parent, "Name this device",
+        f"A name to tell this device apart, shown everywhere instead of “{model or device_id}”.\n"
+        f"Device id: {device_id}\n\nLeave it empty to use the model name again.",
+        manager.device_name(device_id), ok_text="Save name",
+    )
+    if name is not None:
+        manager.rename_device(device_id, name)
+
+
+class _DeviceRow(QWidget):
+    toggled = Signal(str, bool)
+    rename = Signal(str)
+
+    def __init__(self, device: FlutterDevice):
+        super().__init__()
+        self.device = device
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(10)
+        self.check = QCheckBox()
+        self.check.toggled.connect(lambda on: self.toggled.emit(device.id, on))
+        row.addWidget(self.check)
+        self.detail = QLabel()
+        self.detail.setProperty("role", "mono")
+        row.addWidget(self.detail, 1)
+        tag = ToolSlot("", "tag", variant="quiet", compact=True, tooltip="Name this device")
+        tag.clicked.connect(lambda: self.rename.emit(device.id))
+        row.addWidget(tag)
+        self.refresh()
+
+    def refresh(self) -> None:
+        d = self.device
+        manager = RunManager.get()
+        name = manager.device_name(d.id)
+        self.check.setText(name or d.name)
+        kind = "emulator" if d.emulator else d.platform
+        bits = ([d.name] if name else []) + ([kind] if kind else []) + [d.id]
+        self.detail.setText("  ·  ".join(bits))
+        self.setToolTip(f"{d.name} ({kind or 'device'})  ·  {d.id}")
+
+
+class _DeviceList(QScrollArea):
+    """Tick the devices to run on; each can be given a name."""
+
+    changed = Signal()
+    rename = Signal(str)
+
+    def __init__(self):
+        super().__init__()
+        self.setWidgetResizable(True)
+        self.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        holder = QWidget()
+        self._layout = QVBoxLayout(holder)
+        self._layout.setContentsMargins(2, 4, 2, 4)
+        self._layout.setSpacing(4)
+        self.setWidget(holder)
+        self._rows: dict[str, _DeviceRow] = {}
+        self._placeholder = QLabel()
+        self._placeholder.setProperty("role", "dim")
+        self._layout.addWidget(self._placeholder)
+        self._layout.addStretch()
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._fit()
+
+    def set_placeholder(self, text: str) -> None:
+        self._placeholder.setText(text)
+        self._placeholder.setVisible(bool(text))
+        self._fit()
+
+    def set_devices(self, devices: list[FlutterDevice], checked: set[str]) -> None:
+        for row in self._rows.values():
+            row.deleteLater()
+        self._rows = {}
+        for i, d in enumerate(devices):
+            row = _DeviceRow(d)
+            row.check.setChecked(d.id in checked)
+            row.toggled.connect(lambda *_: self.changed.emit())
+            row.rename.connect(self.rename)
+            self._layout.insertWidget(i, row)
+            self._rows[d.id] = row
+        self._fit()
+
+    def refresh_names(self) -> None:
+        for row in self._rows.values():
+            row.refresh()
+
+    def device(self, device_id: str) -> Optional[FlutterDevice]:
+        row = self._rows.get(device_id)
+        return row.device if row else None
+
+    def devices(self) -> list[FlutterDevice]:
+        return [r.device for r in self._rows.values()]
+
+    def checked(self) -> list[FlutterDevice]:
+        return [r.device for r in self._rows.values() if r.check.isChecked()]
+
+    def lock(self, busy_ids: set[str]) -> None:
+        """Devices that are running stay ticked until they stop."""
+        for device_id, row in self._rows.items():
+            busy = device_id in busy_ids
+            if busy and not row.check.isChecked():
+                row.check.setChecked(True)
+            row.check.setEnabled(not busy)
+
+    def _fit(self) -> None:
+        rows = max(1, len(self._rows) + (1 if self._placeholder.isVisible() else 0))
+        self.setFixedHeight(min(rows, 4) * 34 + 8)
 
 
 class FlutterRunWindow(QWidget):
@@ -46,111 +156,84 @@ class FlutterRunWindow(QWidget):
 
     @classmethod
     def open(
-        cls, parent: QWidget, folder: str, launch: Optional[LaunchFile],
-        config_name: Optional[str] = None, autorun: bool = False,
-        name: str = "", icon_path: Optional[str] = None,
-    ) -> None:
-        """Open the window. autorun: start the app right away with the saved device and settings.
+        cls, parent: Optional[QWidget], folder: str, launch: Optional[LaunchFile],
+        config_name: Optional[str] = None, name: str = "", icon_path: Optional[str] = None,
+        note: Optional[str] = None,
+    ) -> "FlutterRunWindow":
+        """Open (or bring forward) the folder's window. note: a message to show in its log.
 
         name / icon_path identify the project in the window's header and taskbar icon.
         """
         window = cls._windows.get(folder)
-        if window is not None:
+        if window is None:
+            window = cls(folder, launch, config_name, name, icon_path)
+            cls._windows[folder] = window
+            window.show()
+        else:
             window.showNormal()
             window.raise_()
             window.activateWindow()
             window.select_config(config_name)
-            if autorun:
-                window.quick_start()
-            return
-        window = cls(folder, launch, config_name, autorun, name, icon_path)
-        cls._windows[folder] = window
-        window.show()
+        if note:
+            window.note(note, "error")
+        return window
 
     @classmethod
-    def shutdown_all(cls) -> None:
-        """Stop every running app (called when the whole program closes)."""
+    def save_all(cls) -> None:
         for window in list(cls._windows.values()):
-            window._stop_and_wait()
             window._save()
-
-    @classmethod
-    def session_state(cls, folder: str) -> tuple[Optional[str], int]:
-        """("building" | "running" | "stopping" | None, seconds busy) for the folder's window."""
-        window = cls._windows.get(folder)
-        session = window._session if window else None
-        if not session or not session.running:
-            return None, 0
-        seconds = int(time.monotonic() - window._busy_since)
-        if window._stopping:
-            return "stopping", seconds
-        if session.started:
-            return "running", 0
-        return "building", seconds
-
-    @classmethod
-    def focus(cls, folder: str) -> bool:
-        window = cls._windows.get(folder)
-        if window is None:
-            return False
-        window.showNormal()
-        window.raise_()
-        window.activateWindow()
-        return True
 
     def __init__(
         self, folder: str, launch: Optional[LaunchFile], config_name: Optional[str],
-        autorun: bool = False, name: str = "", icon_path: Optional[str] = None,
+        name: str = "", icon_path: Optional[str] = None,
     ):
         super().__init__(None, Qt.WindowType.Window)
         self.setObjectName("FlutterRunWindow")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._manager = RunManager.get()
         self._project_name = name
         self._icon_path = icon_path
         self._folder = folder
-        self._flutter = find_flutter()
         self._flavors = detect_flavors(folder)
-        self._session: Optional[FlutterSession] = None
-        self._devices: list[FlutterDevice] = []
-        self._device_results: queue.Queue = queue.Queue()
-        self._configs: dict[str, LaunchConfig] = {
-            c.name: c for c in (launch.configs if launch else []) if c.kind == "flutter"
-        }
-        self._wanted_device: Optional[str] = None  # deviceId to select once devices are listed
+        self._launch = launch
+        self._configs = flutter_configs(launch)
+        self._wanted: set[str] = set()  # Device ids to tick once devices are listed
         self._toggle_buttons: dict[str, ToolSlot] = {}
+        self._chips: dict[str, ToolSlot] = {}
+        self._selected: Optional[str] = None  # Run whose log and toggles are shown
+        self._notes: list[Line] = []  # Shown in the log while no run exists
+        self._looking = False
         self._cwd = folder  # Where flutter runs; a launch.json "cwd" can point at a sub-folder
         self._env: dict = {}
         self._app_args: list[str] = []
-        self._status_text = "Stopped"
-        self._busy_since = time.monotonic()  # When the current build/stop began
-        self._stopping = False
-        self._autorun = autorun  # Run as soon as the device list is in
         self._loading = True  # Don't save while restoring
 
         self.setWindowTitle(f"{name} - Flutter" if name else f"Flutter - {folder}")
-        self.resize(900, 760)
-        self.setMinimumSize(700, 560)
+        self.resize(960, 940)
+        self.setMinimumSize(740, 660)
         big = load_icon(icon_path, 64)
         if big:
             self.setWindowIcon(QIcon(big))  # Taskbar / title bar, to tell the windows apart
         self._build()
-        QShortcut(QKeySequence("Ctrl+R"), self, self._hot_reload)
-        QShortcut(QKeySequence("Ctrl+Shift+R"), self, self._hot_restart)
+        QShortcut(QKeySequence("Ctrl+R"), self, lambda: self._manager.reload_folder(self._folder, False))
+        QShortcut(QKeySequence("Ctrl+Shift+R"), self, lambda: self._manager.reload_folder(self._folder, True))
 
         self._save_timer = QTimer(self, singleShot=True, interval=400)
         self._save_timer.timeout.connect(self._save)
-        self._timer = QTimer(self, interval=POLL_MS)
-        self._timer.timeout.connect(self._tick)
+        self._status_timer = QTimer(self, interval=STATUS_MS)
+        self._status_timer.timeout.connect(self._refresh_status)
+        self._status_timer.start()
 
         self._restore(config_name)
         self._loading = False
+        self._manager.changed.connect(self._sync)
+        self._manager.logged.connect(self._on_logged)
+        self._manager.log_cleared.connect(self._on_cleared)
+        self._sync()
         self._refresh_devices()
-        self._update_controls()
-        self._timer.start()
-        Theme.get().changed.connect(self._retheme)
 
-        if not self._flutter:
-            self._log("Flutter was not found. Add flutter\\bin to PATH (or set FLUTTER_ROOT).", "error")
+        if not find_flutter():
+            self.note(NOT_FOUND, "error")
 
     # -- layout --
 
@@ -188,13 +271,14 @@ class FlutterRunWindow(QWidget):
         form.addWidget(_caps("Configuration"), 0, 0)
         form.addWidget(self._config_box, 0, 1, 1, 2)
 
-        self._device_box = Combo()
-        self._device_box.activated.connect(lambda _: self._device_picked())
+        self._device_list = _DeviceList()
+        self._device_list.changed.connect(self._devices_ticked)
+        self._device_list.rename.connect(self._rename)
         self._refresh_btn = ToolSlot("", "restart", tooltip="Look for devices again")
         self._refresh_btn.clicked.connect(self._refresh_devices)
-        form.addWidget(_caps("Device"), 1, 0)
-        form.addWidget(self._device_box, 1, 1)
-        form.addWidget(self._refresh_btn, 1, 2)
+        form.addWidget(_caps("Devices"), 1, 0, Qt.AlignmentFlag.AlignTop)
+        form.addWidget(self._device_list, 1, 1)
+        form.addWidget(self._refresh_btn, 1, 2, Qt.AlignmentFlag.AlignTop)
 
         modes = QHBoxLayout()
         modes.setSpacing(4)
@@ -239,22 +323,22 @@ class FlutterRunWindow(QWidget):
         for line in (self._target_edit, self._flavor_line, self._args_edit):
             line.textChanged.connect(self._schedule_save)
         self._form_widgets: list[QWidget] = [
-            self._config_box, self._device_box, self._refresh_btn, *self._mode_buttons.values(),
-            self._target_edit, self._flavor_edit, self._args_edit,
+            self._config_box, *self._mode_buttons.values(), self._target_edit, self._flavor_edit, self._args_edit,
         ]
         root.addWidget(form_panel)
 
-        # Controls
+        # Controls (every device of this folder)
         bar = QHBoxLayout()
         bar.setSpacing(6)
-        self._run_btn = ToolSlot("Run", "play", variant="primary")
+        self._run_btn = ToolSlot("Run", "play", variant="primary", tooltip="Run on the ticked devices")
+        self._run_btn.reserve("Run · 9")
         self._run_btn.clicked.connect(self._run)
-        self._stop_btn = ToolSlot("Stop", "stop", variant="danger")
-        self._stop_btn.clicked.connect(self._stop)
-        self._reload_btn = ToolSlot("Hot reload", "bolt", tooltip="Hot reload (Ctrl+R)")
-        self._reload_btn.clicked.connect(self._hot_reload)
-        self._restart_btn = ToolSlot("Hot restart", "restart", tooltip="Hot restart (Ctrl+Shift+R)")
-        self._restart_btn.clicked.connect(self._hot_restart)
+        self._stop_btn = ToolSlot("Stop", "stop", variant="danger", tooltip="Stop on every device")
+        self._stop_btn.clicked.connect(lambda: self._manager.stop_folder(self._folder))
+        self._reload_btn = ToolSlot("Hot reload", "bolt", tooltip="Hot reload every device (Ctrl+R)")
+        self._reload_btn.clicked.connect(lambda: self._manager.reload_folder(self._folder, False))
+        self._restart_btn = ToolSlot("Hot restart", "restart", tooltip="Hot restart every device (Ctrl+Shift+R)")
+        self._restart_btn.clicked.connect(lambda: self._manager.reload_folder(self._folder, True))
         for w in (self._run_btn, self._stop_btn):
             bar.addWidget(w)
         bar.addSpacing(10)
@@ -276,7 +360,23 @@ class FlutterRunWindow(QWidget):
         controls.addWidget(self._progress)
         root.addLayout(controls)
 
-        # Service extension toggles
+        # Which device's toggles and log are shown (only with more than one)
+        self._chip_row = QWidget()
+        chips = QHBoxLayout(self._chip_row)
+        chips.setContentsMargins(0, 0, 0, 0)
+        chips.setSpacing(4)
+        chips.addWidget(_caps("Device"))
+        chips.addSpacing(6)
+        self._chip_layout = QHBoxLayout()
+        self._chip_layout.setSpacing(4)
+        chips.addLayout(self._chip_layout)
+        chips.addStretch()
+        self._chip_group = QButtonGroup(self)
+        self._chip_group.setExclusive(True)
+        self._chip_row.hide()
+        root.addWidget(self._chip_row)
+
+        # Service extension toggles (the device shown)
         toggles_panel = FoamPanel()
         toggles = QGridLayout(toggles_panel)
         toggles.setContentsMargins(14, 12, 14, 16)
@@ -294,25 +394,19 @@ class FlutterRunWindow(QWidget):
 
         # Log
         log_head = QHBoxLayout()
-        log_head.addWidget(_caps("flutter run log"))
+        self._log_caps = _caps("flutter run log")
+        log_head.addWidget(self._log_caps)
         log_head.addStretch()
         clear = ToolSlot("Clear log", "erase", variant="quiet", compact=True)
         clear.clicked.connect(self._clear_log)
         log_head.addWidget(clear)
         root.addLayout(log_head)
-        self._log_text = QPlainTextEdit()
-        self._log_text.setReadOnly(True)
-        self._log_text.setMaximumBlockCount(MAX_LOG_LINES)
-        self._log_text.setFont(mono_font(SIZE_META + 1))
-        self._log_text.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
-        root.addWidget(self._log_text, 1)
+        self._log = LogView()
+        root.addWidget(self._log, 1)
 
     def showEvent(self, event) -> None:
         apply_title_bar(self)
         super().showEvent(event)
-
-    def _retheme(self) -> None:
-        self.update()
 
     # -- saved settings --
 
@@ -324,7 +418,6 @@ class FlutterRunWindow(QWidget):
 
     def _on_mode_picked(self, mode: str) -> None:
         self._set_mode(mode)
-        self._update_controls()
         self._schedule_save()
 
     def _flavor(self) -> str:
@@ -332,21 +425,23 @@ class FlutterRunWindow(QWidget):
 
     def _restore(self, config_name: Optional[str]) -> None:
         """Start from the saved settings; a config picked from the menu overrides them."""
-        saved = ProjectService.get_flutter_run(self._folder)
-        name = config_name or saved.get("config")
-        if name in self._configs:
-            self._config_box.setCurrentText(name)
-            self._apply_config(name)
-        else:
-            self._apply_config(CUSTOM)
-        if not config_name:
-            self._target_edit.setText(saved.get("target") or self._target_edit.text())
-            self._set_mode(saved.get("mode") if saved.get("mode") in FLUTTER_MODES else self._mode())
-            self._flavor_line.setText(saved.get("flavor", self._flavor()))
-            self._args_edit.setText(saved.get("args", self._args_edit.text()))
-        if saved.get("device") and (not config_name or not self._wanted_device):
-            self._wanted_device = saved["device"]
-        self._update_controls()
+        try:
+            saved = saved_run(self._folder, self._launch, config_name)
+        except LaunchError as e:
+            dialogs.error(self, "launch.json", str(e))
+            return
+        self._config_box.setCurrentText(saved.config)
+        self._fill(saved.settings, saved.args)
+        self._wanted = set(saved.devices)
+
+    def _fill(self, settings: FlutterRunSettings, args: str) -> None:
+        self._cwd = settings.cwd
+        self._env = settings.env
+        self._app_args = settings.app_args
+        self._target_edit.setText(settings.target)
+        self._set_mode(settings.mode)
+        self._flavor_line.setText(settings.flavor)
+        self._args_edit.setText(args)
 
     def _schedule_save(self, *_) -> None:
         if not self._loading:
@@ -354,43 +449,21 @@ class FlutterRunWindow(QWidget):
 
     def _save(self) -> None:
         self._save_timer.stop()
+        devices = [d.id for d in self._device_list.checked()] if self._device_list.devices() else sorted(self._wanted)
         ProjectService.set_flutter_run(self._folder, {
             "config": self._config_box.currentText(),
-            "device": self._wanted_device,
+            "devices": devices,
+            "device": devices[0] if devices else None,  # Read by older versions
             "mode": self._mode(),
             "target": self._target_edit.text(),
             "flavor": self._flavor(),
             "args": self._args_edit.text(),
         })
 
-    def _device_picked(self) -> None:
-        self._wanted_device = self._selected_device_id()
-        self._schedule_save()
-
-    def quick_start(self) -> None:
-        """Run with the saved settings once the devices are listed (or now if they already are)."""
-        if self._busy():
-            return
-        if self._devices:
-            self._autorun_now()
-        else:
-            self._autorun = True
-
-    def _autorun_now(self) -> None:
-        self._autorun = False
-        if self._busy() or not self._flutter:
-            return
-        if not self._wanted_device:
-            self._log("Quick start: no device saved yet. Pick a device and press Run once.", "note")
-        elif self._selected_device_id() != self._wanted_device:
-            self._log(f"Quick start: saved device {self._wanted_device} is not connected. Pick another and press Run.", "note")
-        else:
-            self._run()
-
     # -- configuration and devices --
 
     def select_config(self, name: Optional[str]) -> None:
-        if name in self._configs and not (self._session and self._session.running):
+        if name in self._configs and not self._manager.active_runs(self._folder):
             self._config_box.setCurrentText(name)
             self._apply_config(name)
 
@@ -408,294 +481,239 @@ class FlutterRunWindow(QWidget):
             except LaunchError as e:
                 dialogs.error(self, "launch.json", str(e))
                 return
-        self._cwd = settings.cwd
-        self._env = settings.env
-        self._app_args = settings.app_args
-        self._target_edit.setText(settings.target)
-        self._set_mode(settings.mode)
-        self._flavor_line.setText(settings.flavor)
-        self._args_edit.setText(shlex.join(settings.tool_args))
-        self._wanted_device = settings.device_id or self._selected_device_id() or self._wanted_device
-        self._select_wanted_device()
-        self._update_controls()
+        self._fill(settings, shlex.join(settings.tool_args))
+        if settings.device_id:
+            self._wanted = {settings.device_id}
+            if self._device_list.devices():
+                self._device_list.set_devices(self._device_list.devices(), self._wanted)
+        self._sync()
 
     def _refresh_devices(self) -> None:
-        if not self._flutter:
+        if self._looking or not find_flutter():
             return
+        self._looking = True
         self._refresh_btn.setEnabled(False)
-        self._device_box.clear()
-        self._device_box.setPlaceholderText("Looking for devices…")
-        flutter = self._flutter
-
-        def work():
-            try:
-                self._device_results.put((list_devices(flutter), None))
-            except FlutterError as e:
-                self._device_results.put((None, str(e)))
-
-        threading.Thread(target=work, daemon=True).start()
+        self._device_list.set_placeholder("Looking for devices…")
+        self._manager.list_devices_async(self._devices_loaded)
 
     def _devices_loaded(self, devices: Optional[list[FlutterDevice]], error: Optional[str]) -> None:
-        self._refresh_btn.setEnabled(not self._busy())
+        self._looking = False
+        self._refresh_btn.setEnabled(True)
         if error:
-            self._device_box.setPlaceholderText("")
-            self._autorun = False
-            self._log(error, "error")
+            self._device_list.set_placeholder("Could not list devices")
+            self.note(error, "error")
             return
-        self._devices = devices
-        self._device_box.clear()
-        self._device_box.addItems([d.display_name() for d in devices])
+        if self._device_list.devices():
+            self._wanted = {d.id for d in self._device_list.checked()}
+        devices = list(devices or [])
+        known = {d.id for d in devices}
+        for run in self._manager.active_runs(self._folder):  # A running device stays listed
+            if run.device_id not in known:
+                devices.append(FlutterDevice(run.device_id, run.model, ""))
         if not devices:
-            self._device_box.setPlaceholderText("No devices found")
-            self._log("No devices found. Connect a phone with USB debugging, or start an emulator.", "note")
-            self._autorun = False
-            return
-        self._select_wanted_device()
-        if self._autorun:
-            self._autorun_now()
+            self._device_list.set_devices([], set())
+            self._device_list.set_placeholder("No devices found. Connect a phone with USB debugging, or start an emulator.")
+        else:
+            self._device_list.set_placeholder("")
+            if not self._wanted & {d.id for d in devices}:
+                self._wanted.add(devices[0].id)
+            self._device_list.set_devices(devices, self._wanted)
+        self._sync()
 
-    def _select_wanted_device(self) -> None:
-        if not self._devices:
-            return
-        index = next((i for i, d in enumerate(self._devices) if d.id == self._wanted_device), None)
-        if index is None:
-            current = self._device_box.currentIndex()
-            index = current if current >= 0 else 0
-        self._device_box.setCurrentIndex(index)
+    def _devices_ticked(self) -> None:
+        self._wanted = {d.id for d in self._device_list.checked()}
+        self._schedule_save()
+        self._update_controls()
 
-    def _selected_device_id(self) -> Optional[str]:
-        index = self._device_box.currentIndex()
-        return self._devices[index].id if 0 <= index < len(self._devices) else None
+    def _rename(self, device_id: str) -> None:
+        device = self._device_list.device(device_id)
+        rename_device(self, device_id, device.name if device else "")
 
     # -- running --
 
-    def _busy(self) -> bool:
-        return bool(self._session and self._session.running)
-
     def _run(self) -> None:
-        if not self._flutter:
-            dialogs.error(self, "Flutter", "Flutter was not found. Add flutter\\bin to PATH.")
+        if not find_flutter():
+            dialogs.error(self, "Flutter", NOT_FOUND)
             return
-        device = self._selected_device_id()
-        self._wanted_device = device or self._wanted_device
-        if not device:
-            dialogs.info(self, "Flutter", "Pick a device first (the refresh button looks for new ones).")
+        busy = {r.device_id for r in self._manager.active_runs(self._folder)}
+        devices = [d for d in self._device_list.checked() if d.id not in busy]
+        if not devices:
+            dialogs.info(self, "Flutter", "Tick one or more devices first (the refresh button looks for new ones).")
             return
         try:
             tool_args = shlex.split(self._args_edit.text())
         except ValueError as e:
             dialogs.error(self, "Flutter", f"Extra args are not valid: {e}")
             return
-        flavor = self._flavor().strip()
         settings = FlutterRunSettings(
             cwd=self._cwd,
             target=self._target_edit.text().strip() or "lib/main.dart",
             mode=self._mode(),
-            device_id=device,
-            flavor=flavor,
+            flavor=self._flavor().strip(),
             tool_args=tool_args,
             app_args=self._app_args,
             env=self._env,
         )
-        has_flavor = bool(flavor) or any(a == "--flavor" or a.startswith("--flavor=") for a in tool_args)
-        if self._flavors and not has_flavor:
-            dialogs.warn(
-                self, "Flutter",
-                "This project defines flavors (" + ", ".join(self._flavors) + ") and the build fails "
-                "without one.\n\nPick one in Flavor, or choose a launch.json configuration.",
-            )
+        problem = flavor_problem(self._folder, settings)
+        if problem:
+            dialogs.warn(self, "Flutter", problem)
             return
-        config = self._configs.get(self._config_box.currentText())
-        if config and config.data.get("preLaunchTask"):
-            self._log(f'preLaunchTask "{config.data["preLaunchTask"]}" is skipped for Flutter runs.', "note")
-
-        session = FlutterSession(self._flutter, settings)
-        try:
-            session.start()
-        except OSError as e:
-            dialogs.error(self, "Flutter", f"Could not start flutter: {e}")
-            return
-        self._session = session
-        self._toggle_reset()
-        self._log(f"$ {shlex.join(session.command_line())}", "note")
-        self._stopping = False
-        self._busy_since = time.monotonic()
-        self._set_status("Starting…")
         self._save()
-        self._update_controls()
-
-    def _stop(self) -> None:
-        if self._busy():
-            self._stopping = True
-            self._busy_since = time.monotonic()
-            self._set_status("Stopping…")
-            self._session.stop()
-            self._update_controls()
-
-    def _hot_reload(self) -> None:
-        self._restart(False)
-
-    def _hot_restart(self) -> None:
-        self._restart(True)
-
-    def _restart(self, full: bool) -> None:
-        session = self._session
-        if not session or not session.started or self._mode() != "debug":
-            return
-        what = "Hot restart" if full else "Hot reload"
-        self._set_status(f"{what}…")
-        started = time.monotonic()
-
-        def done(error: Optional[str]) -> None:
-            if error:
-                self._log(f"{what} failed: {error}", "error")
-            else:
-                self._log(f"{what} done in {int((time.monotonic() - started) * 1000)} ms", "note")
-            self._set_status("Running")
-
-        (session.restart if full else session.reload)(done)
+        error = self._manager.start(self._folder, settings, devices, self._project_name, self._icon_path)
+        if error:
+            dialogs.error(self, "Flutter", error)
+        config = self._configs.get(self._config_box.currentText())
+        first = next((r for r in self._manager.runs(self._folder) if r.device_id == devices[0].id), None)
+        if first:
+            self._select(first.id)
+            if config and config.data.get("preLaunchTask"):
+                self._manager.note(first.id, f'preLaunchTask "{config.data["preLaunchTask"]}" is skipped for Flutter runs.')
 
     def _toggle(self, toggle) -> None:
         btn = self._toggle_buttons[toggle.method]
-        session = self._session
-        wanted = btn.isChecked()
-        if not session or not session.started:
-            btn.setChecked(not wanted)
+        run = self._manager.run(self._selected)
+        if run is None or not run.started:
+            btn.setChecked(not btn.isChecked())
             return
+        self._manager.set_toggle(run.id, toggle, btn.isChecked())
 
-        def done(is_on: Optional[bool], error: Optional[str]) -> None:
-            if error:
-                self._log(f"{toggle.label} failed: {error}", "error")
-                btn.setChecked(not wanted)
-            else:
-                btn.setChecked(bool(is_on))
+    # -- following the manager --
 
-        session.set_extension(toggle, wanted, done)
+    def _select(self, rid: Optional[str]) -> None:
+        if rid == self._selected:
+            return
+        self._selected = rid
+        run = self._manager.run(rid)
+        self._log.set_lines(run.log if run else self._notes)
+        chip = self._chips.get(rid) if rid else None
+        if chip:
+            chip.setChecked(True)
+        self._sync()
 
-    def _toggle_reset(self) -> None:
-        for btn in self._toggle_buttons.values():
-            btn.setChecked(False)
+    def _sync(self) -> None:
+        """Bring the chips, toggles, buttons and status up to date with the folder's runs."""
+        runs = self._manager.runs(self._folder)
+        ids = [r.id for r in runs]
+        if self._selected not in ids:
+            pick = next((r.id for r in runs if r.active), ids[0] if ids else None)
+            if pick != self._selected:
+                self._select(pick)
+                return
+        if list(self._chips) != ids:
+            for chip in self._chips.values():
+                self._chip_group.removeButton(chip)
+                chip.deleteLater()
+            self._chips = {}
+            for run in runs:
+                chip = ToolSlot(run.label, compact=True)
+                chip.setCheckable(True)
+                chip.clicked.connect(lambda _=False, rid=run.id: self._select(rid))
+                self._chip_group.addButton(chip)
+                self._chip_layout.addWidget(chip)
+                self._chips[run.id] = chip
+            if self._selected in self._chips:
+                self._chips[self._selected].setChecked(True)
+        for run in runs:
+            chip = self._chips[run.id]
+            if chip.text() != run.label:
+                chip.setText(run.label)
+            chip.setToolTip(f"{run.label}: {run.status_text()}")
+        self._chip_row.setVisible(len(runs) > 1)
+        selected = self._manager.run(self._selected)
+        self._log_caps.setText(("flutter run log · " + selected.label).upper() if selected else "FLUTTER RUN LOG")
+        self._device_list.refresh_names()
+        self._update_controls()
 
-    # -- polling --
+    def _on_logged(self, rid: str, lines) -> None:
+        if rid == self._selected:
+            self._log.append_lines(lines)
 
-    def _tick(self) -> None:
-        try:
-            while True:
-                self._devices_loaded(*self._device_results.get_nowait())
-        except queue.Empty:
-            pass
-        session = self._session
-        if session:
-            for event in session.poll():
-                self._handle(event)
-        self._refresh_status()
+    def _on_cleared(self, rid: str) -> None:
+        if rid == self._selected:
+            self._log.clear()
 
-    def _handle(self, event) -> None:
-        if event.kind in ("log", "error"):
-            self._log(event.text, event.kind)
-        elif event.kind == "status":
-            if event.text:
-                self._set_status(event.text)
-                self._update_controls()
-        elif event.kind == "state":
-            self._update_controls()
-        elif event.kind == "exit":
-            self._log(f"flutter exited with code {event.text}", "note")
-            self._session = None
-            self._stopping = False
-            self._toggle_reset()
-            self._set_status("Stopped")
-            self._refresh_btn.setEnabled(True)
-            self._update_controls()
+    def _clear_log(self) -> None:
+        if self._selected:
+            self._manager.clear_log(self._selected)
+        else:
+            self._notes.clear()
+            self._log.clear()
+
+    def note(self, text: str, kind: str = "note") -> None:
+        """A message in the log: the shown run's, or the window's own before anything ran."""
+        if self._selected:
+            self._manager.note(self._selected, text, kind)
+        else:
+            self._notes.append((text, kind))
+            self._log.append_lines([(text, kind)])
 
     def _update_controls(self) -> None:
-        session = self._session
-        busy = self._busy()
-        started = bool(session and session.started)
-        mode = self._mode()
-        self._run_btn.setEnabled(not busy)
-        self._stop_btn.setEnabled(busy)
-        reloadable = started and mode == "debug"
+        active = self._manager.active_runs(self._folder)
+        busy_ids = {r.device_id for r in active}
+        self._device_list.lock(busy_ids)
+        to_run = [d for d in self._device_list.checked() if d.id not in busy_ids]
+        self._run_btn.setEnabled(bool(to_run) and bool(find_flutter()))
+        self._run_btn.setText(f"Run · {len(to_run)}" if len(to_run) > 1 else "Run")
+        self._stop_btn.setEnabled(any(not r.stopping for r in active))
+        reloadable = any(r.reloadable for r in active)
         self._reload_btn.setEnabled(reloadable)
         self._restart_btn.setEnabled(reloadable)
+        selected = self._manager.run(self._selected)
         for tg in TOGGLES:
-            self._toggle_buttons[tg.method].setEnabled(started and mode in tg.modes)
-        working = busy and (not started or self._stopping)
+            btn = self._toggle_buttons[tg.method]
+            btn.setEnabled(bool(selected and selected.started and selected.mode in tg.modes))
+            btn.setChecked(bool(selected and selected.toggles.get(tg.method)))
+        for w in self._form_widgets:
+            w.setEnabled(not active)
+        self._refresh_status()
+
+    def _refresh_status(self) -> None:
+        """One device: its status and timer. Several: how many build, run and stop."""
+        active = self._manager.active_runs(self._folder)
+        selected = self._manager.run(self._selected)
+        states = [r.state() for r in active]
+        working = any(s in ("building", "stopping") for s in states)
+        if len(active) == 1:
+            text = active[0].status_text()
+        elif active:
+            parts = []
+            for state, word in (("building", "building"), ("running", "running"), ("stopping", "stopping")):
+                n = states.count(state)
+                if n:
+                    parts.append(f"{n} {word}")
+            busy = [r for r in active if r.state() in ("building", "stopping")]
+            text = " · ".join(parts)
+            if busy:
+                s = max(r.seconds() for r in busy)
+                text += f"  {s // 60}:{s % 60:02d}"
+        else:
+            text = selected.status if selected else "Stopped"
+        if self._status.text() != text:
+            self._status.setText(text)
         if working:
             self._progress.start()
         else:
             self._progress.stop()
-        self._lamp.set_state("busy" if working else ("running" if started else "idle"))
-        for w in self._form_widgets:
-            w.setEnabled(not busy)
-
-    def _set_status(self, text: str) -> None:
-        self._status_text = text
-        self._refresh_status()
-
-    def _refresh_status(self) -> None:
-        """Status text; while building or stopping it also shows the elapsed time."""
-        text = self._status_text
-        session = self._session
-        if session and session.running and (not session.started or self._stopping):
-            seconds = int(time.monotonic() - self._busy_since)
-            text = f"{text.rstrip('.…')}…  {seconds // 60}:{seconds % 60:02d}"
-        elif session and session.started and self._mode() != "debug":
-            text += f"  ({self._mode()} mode: no hot reload/restart, run in debug)"
-        if self._status.text() != text:
-            self._status.setText(text)
-
-    # -- log --
-
-    def _log(self, text: str, tag: str = "") -> None:
-        box = self._log_text
-        bar = box.verticalScrollBar()
-        at_bottom = bar.value() >= bar.maximum() - 2
-        fmt = QTextCharFormat()
-        if tag == "error":
-            fmt.setForeground(t("red"))
-        elif tag == "note":
-            fmt.setForeground(t("ink_dim"))
-        cursor = QTextCursor(box.document())
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        if not box.document().isEmpty():
-            cursor.insertBlock()
-        cursor.insertText(text, fmt)
-        if at_bottom:
-            bar.setValue(bar.maximum())
-
-    def _clear_log(self) -> None:
-        self._log_text.clear()
+        failed = bool(selected and selected.failed and not active)
+        self._lamp.set_state(
+            "busy" if working else "running" if "running" in states else "error" if failed else "idle"
+        )
 
     # -- closing --
 
-    def _stop_and_wait(self) -> None:
-        """Stop the app and wait (briefly) for flutter to exit so no process is left behind."""
-        session = self._session
-        if not session or not session.running:
-            return
-        session.stop()
-        deadline = time.monotonic() + STOP_GRACE_SECONDS + 2
-        while session.running and time.monotonic() < deadline:
-            session.poll()
-            time.sleep(0.05)
-        if session.running:
-            session.kill()
-
     def closeEvent(self, event) -> None:
-        if self._busy():
-            if not dialogs.confirm(self, "Flutter", "Stop the running app and close this window?", "Stop and close"):
-                event.ignore()
-                return
-            self._set_status("Stopping…")
-            QApplication.processEvents()
-            self._stop_and_wait()
-        self._timer.stop()
+        """Closing only hides the view: running apps keep going (the Log sidebar still shows them)."""
+        self._status_timer.stop()
         self._save()
         self._windows.pop(self._folder, None)
-        try:
-            Theme.get().changed.disconnect(self._retheme)
-        except (RuntimeError, TypeError):
-            pass
+        for signal, slot in (
+            (self._manager.changed, self._sync), (self._manager.logged, self._on_logged),
+            (self._manager.log_cleared, self._on_cleared),
+        ):
+            try:
+                signal.disconnect(slot)
+            except (RuntimeError, TypeError):
+                pass
         self.deleteLater()
         event.accept()
+

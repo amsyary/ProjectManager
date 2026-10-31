@@ -16,7 +16,7 @@ Replace "navigate folders, remember paths, open five windows by hand" with one c
 
 ## Positioning
 
-A launcher that understands a project as a *bundle of folders* and knows what each folder can do: open in Cursor / VS Code / Antigravity, terminal in the user's preferred shell, saved per-folder commands, `.vscode/tasks.json` tasks, `.vscode/launch.json` configurations, and a full Flutter run console (device, mode, flavor, hot reload/restart, service-extension toggles) without opening VS Code.
+A launcher that understands a project as a *bundle of folders* and knows what each folder can do: open in Cursor / VS Code / Antigravity / Claude Desktop, terminal in the user's preferred shell, saved per-folder commands, `.vscode/tasks.json` tasks, `.vscode/launch.json` configurations, and a full Flutter run console (device, mode, flavor, hot reload/restart, service-extension toggles) without opening VS Code.
 
 ## Operating Context
 

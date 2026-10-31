@@ -21,11 +21,12 @@ from ui import dialogs
 from ui.flutter_run_window import FlutterRunWindow
 from ui.icon_loader import load_icon, load_type_icon
 from ui.launch_menu import has_launch_options, quick_start, show_launch_menu
+from ui.run_manager import RunManager
 from ui.tasks_menu import show_tasks_menu
 from ui.theme import RADIUS_PANEL, SIZE_MAIN, SIZE_META, label_font, mono_font, t
 from ui.widgets import DymoLabel, FlowLayout, FoamPanel, IconWell, Menu, ToolSlot, paint_foam
 
-EDITORS = {"cursor": "Cursor", "code": "VS Code", "antigravity": "Antigravity"}
+EDITORS = {"cursor": "Cursor", "code": "VS Code", "antigravity": "Antigravity", "claude": "Claude"}
 
 _OPEN_ICON = {
     ProjectType.LINK: ("globe", "Open in the browser"),
@@ -194,6 +195,7 @@ class SubProjectPanel(QScrollArea):
         on_edit_project: Callable[[Project], None],
         on_delete_project: Callable[[Project], None],
         on_add_project: Callable[[], None],
+        on_show_log: Callable[[str], None],
         parent: Optional[QWidget] = None,
     ):
         super().__init__(parent)
@@ -204,7 +206,8 @@ class SubProjectPanel(QScrollArea):
         self._on_edit = on_edit_project
         self._on_delete = on_delete_project
         self._on_add = on_add_project
-        self._start_slots: list[tuple[str, ToolSlot]] = []
+        self._on_show_log = on_show_log
+        self._start_slots: list[tuple[str, ToolSlot, ToolSlot]] = []  # folder, Start, Log
         self.setWidgetResizable(True)
         self.setFrameShape(QScrollArea.Shape.NoFrame)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -212,6 +215,7 @@ class SubProjectPanel(QScrollArea):
         self._timer = QTimer(self, interval=500)
         self._timer.timeout.connect(self._refresh_run_slots)
         self._timer.start()
+        RunManager.get().changed.connect(self._refresh_run_slots)
         self._fade = QVariantAnimation(self, startValue=0.0, endValue=1.0, duration=240)
         self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._fade.valueChanged.connect(self._fade_step)
@@ -440,40 +444,49 @@ class SubProjectPanel(QScrollArea):
         btn.clicked.connect(lambda: show_launch_menu(btn, folder, load_launch(folder), self._terminal, name, icon_path))
         tools.addWidget(btn)
         if is_flutter_project(folder):
-            start = ToolSlot("Start", "play", tooltip="Quick start: run Flutter with the saved device and configuration")
-            start.reserve("Building 0:00", "Stopping 0:00", "Running", out=True)  # Rows don't reflow when a build starts
+            start = ToolSlot("Start", "play")
+            start.reserve("Building 0:00", "Stopping 0:00", "Running · 2", out=True)  # Rows don't reflow when a build starts
             start.clicked.connect(lambda: self._start_or_focus(start, folder, name, icon_path))
             tools.addWidget(start)
-            self._start_slots.append((folder, start))
+            log = ToolSlot("Log", "logs", tooltip="Show this folder's run log in the sidebar")
+            log.set_ghost_when_disabled(True)  # An empty cut-out until something has run
+            log.clicked.connect(lambda: self._on_show_log(folder))
+            tools.addWidget(log)
+            self._start_slots.append((folder, start, log))
 
     # -- running state: a tool that is out of its slot shows the yellow floor --
 
     def _refresh_run_slots(self) -> None:
+        manager = RunManager.get()
         alive = []
-        for folder, slot in self._start_slots:
+        for folder, slot, log in self._start_slots:
             try:
-                state, seconds = FlutterRunWindow.session_state(folder)
+                state, seconds, running = manager.folder_state(folder)
                 if state is None:
                     slot.set_out(False)
                     slot.setText("Start")
                     slot.set_icon_name("play")
-                    slot.setToolTip("Quick start: run Flutter with the saved device and configuration")
+                    slot.setToolTip("Run in the background on the saved devices (the log is in the sidebar)")
                 else:
                     slot.set_out(True)
                     slot.set_icon_name("pulse" if state == "running" else "restart")
                     label = {"running": "Running", "building": "Building", "stopping": "Stopping"}[state]
-                    if state != "running":
+                    if state == "running":
+                        label += f" · {running}" if running > 1 else ""
+                    else:
                         label += f" {seconds // 60}:{seconds % 60:02d}"
                     slot.setText(label)
                     slot.setToolTip("Show the Flutter window")
-                alive.append((folder, slot))
+                log.setEnabled(bool(manager.runs(folder)))
+                alive.append((folder, slot, log))
             except RuntimeError:
                 pass  # Slot was deleted with an old drawer
         self._start_slots = alive
 
     def _start_or_focus(self, button: ToolSlot, folder: str, name: str, icon_path: Optional[str]) -> None:
-        state, _ = FlutterRunWindow.session_state(folder)
-        if state is not None and FlutterRunWindow.focus(folder):
+        """Start runs in the background; while it runs, the slot opens the Flutter window."""
+        if RunManager.get().folder_state(folder)[0] is not None:
+            FlutterRunWindow.open(None, folder, load_launch(folder), name=name, icon_path=icon_path)
             return
         quick_start(button, folder, name, icon_path)
         self._refresh_run_slots()

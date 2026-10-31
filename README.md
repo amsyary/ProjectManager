@@ -17,19 +17,22 @@ Requires Windows 10 or 11 (64-bit); Windows on ARM runs it under x64 emulation. 
 
 ## Purpose
 
-Instead of navigating folders or remembering paths, open the app, type a few letters of the project name, and launch what you need: Cursor, VS Code or Antigravity, a terminal in your preferred shell, a saved command, a VS Code task, a launch configuration, or a full Flutter run with hot reload.
+Instead of navigating folders or remembering paths, open the app, type a few letters of the project name, and launch what you need: Cursor, VS Code, Antigravity or Claude Desktop, a terminal in your preferred shell, a saved command, a VS Code task, a launch configuration, or a full Flutter run with hot reload.
 
 ## Features
 
 - **Projects as drawers** – The left rail lists your projects, most-opened first. The open project shows a header with its tools and one slot per folder, and each folder only shows the actions it can actually perform
 - **Folder types** – Flutter, Admin Dashboard, Cloud Function, Web Version, Documentation, General, Data File (opens in Notepad), Execute / Open file (system default app) and Link (browser)
-- **Quick open** – Open a folder in Cursor, VS Code or Antigravity, or "Open all" for the whole project. The main project folder opens in Explorer. Missing folders are flagged in red
+- **Quick open** – Open a folder in Cursor, VS Code, Antigravity or Claude, or "Open all" for the whole project. Claude starts a new Claude Code session in the folder in Claude Desktop, which asks you to confirm the folder each time. The main project folder opens in Explorer. Missing folders are flagged in red
 - **Search** – Start typing anywhere in the project list; the first match opens straight away
 - **Terminal** – Open any folder (or the main project folder) in Windows Terminal, PowerShell, PowerShell 7, Command Prompt or Git Bash
 - **Commands** – Save terminal commands per folder (e.g. `npm run dev`, `npm run build`). Run one, pick from the Run menu, "Run all", or tick "Run when opened" to start it with Open / Open all
 - **VS Code tasks** – Folders with a `.vscode/tasks.json` get a Tasks menu. Supports shell/process, npm and typescript tasks, `dependsOn` (incl. `sequence`), `${workspaceFolder}`/`${env:...}` and `${input:...}` prompts (promptString and pickString). Tasks run in the shell your editor's terminal uses, like VS Code
-- **Launch / Flutter run** – Folders with a `.vscode/launch.json` or a Flutter `pubspec.yaml` get a Launch menu. Node, Python and plain Dart configurations run in a terminal (a `preLaunchTask` runs first). Flutter configurations open a run window with device, mode (debug / profile / release), target, flavor (auto-detected from Gradle) and extra args; launch.json fills these in (`program`, `flutterMode`, `deviceId`, `toolArgs`, `args`, `env`, `cwd`). While the app runs you get **Hot reload** (Ctrl+R), **Hot restart** (Ctrl+Shift+R), nine service-extension toggles (debug paint, repaint rainbow, baselines, performance overlay, widget inspector, invert oversized images, slow animations, dark mode, iOS look) and the live `flutter run` log. The window remembers each folder's settings
-- **Start** – Flutter folders get a Start button that runs with the saved device and settings in one click. While the app builds or runs, the button shows its state and timer ("Building 0:42", "Running") and the project's drawer gets a yellow dot; click it to bring the run window forward
+- **Launch / Flutter run** – Folders with a `.vscode/launch.json` or a Flutter `pubspec.yaml` get a Launch menu. Node, Python and plain Dart configurations run in a terminal (a `preLaunchTask` runs first). Flutter configurations open a run window with devices, mode (debug / profile / release), target, flavor (auto-detected from Gradle) and extra args; launch.json fills these in (`program`, `flutterMode`, `deviceId`, `toolArgs`, `args`, `env`, `cwd`). While the app runs you get **Hot reload** (Ctrl+R), **Hot restart** (Ctrl+Shift+R), nine service-extension toggles (debug paint, repaint rainbow, baselines, performance overlay, widget inspector, invert oversized images, slow animations, dark mode, iOS look) and the live `flutter run` log. The window remembers each folder's settings. Closing it doesn't stop the app: runs keep going in the background
+- **Several devices at once** – Tick more than one device and Run installs and runs the app on all of them, to test side by side. Stop, hot reload and hot restart act on every device; the device strip picks whose toggles and log you see
+- **Device names** – Give a device a name (the tag button next to it) so two phones of the same model are easy to tell apart. The name shows in the run window, the logs and the scrcpy menu
+- **Start** – Flutter folders get a Start button that runs in the background with the saved devices and settings in one click, without opening a window. While the app builds or runs, the button shows its state and timer ("Building 0:42", "Running · 2") and the project's drawer gets a yellow dot; click it to open the run window
+- **Logs sidebar** – The Log button next to Start (or Logs in the top bar, Ctrl+L) opens the run log beside the drawer. Switch between every project and device that ran, hot reload, hot restart, stop or run again, and clear the log. The log is colored like VS Code: ANSI colors from your app, errors red, warnings amber, stack frames dimmed, links underlined (Ctrl+click opens web links)
 - **scrcpy** – Mirror a connected Android device or emulator from the top bar, or "Run on all". scrcpy runs without a console window; the button shows how many devices are mirroring (needs `scrcpy` and `adb` on PATH)
 - **Snippets** – A side panel of saved text (keys, commands, anything you paste often) with one-click Copy
 - **Dark and light themes** – Toggle in the top bar; the choice is saved and the Windows title bar follows it
@@ -45,8 +48,9 @@ Instead of navigating folders or remembering paths, open the app, type a few let
 - Enter on a project focuses its first tool (Open all); Enter again launches it. Ctrl+Enter opens all folders directly
 - Double-click a folder row to open it
 - Ctrl+N adds a project, Ctrl+E edits it, Delete removes it (asks first), F5 re-reads tasks/launch files
+- Ctrl+L shows or hides the logs sidebar
 - In dialogs, Enter (or Ctrl+S) saves and Esc cancels
-- In the Flutter window: Ctrl+R hot reload, Ctrl+Shift+R hot restart
+- In the Flutter window: Ctrl+R hot reload, Ctrl+Shift+R hot restart (every device)
 
 ## Requirements
 

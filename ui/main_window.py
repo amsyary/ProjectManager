@@ -14,11 +14,14 @@ from PySide6.QtWidgets import (
 from models.project import Project
 from services.project_service import ProjectService
 from services.terminal_launcher import TERMINALS
+from services.vscode_launch import load_launch
 from ui import dialogs, icons
 from ui.add_edit_dialog import ProjectDialog
 from ui.flutter_run_window import FlutterRunWindow
 from ui.icon_loader import clear_cache
+from ui.log_panel import LogPanel
 from ui.project_card import ProjectRail
+from ui.run_manager import RunManager
 from ui.scrcpy_button import ScrcpyButton
 from ui.sub_project_panel import EDITORS, SubProjectPanel
 from ui.text_panel import TextPanel
@@ -69,7 +72,9 @@ class MainWindow(QMainWindow):
         self._run_timer = QTimer(self, interval=1000)
         self._run_timer.timeout.connect(self._rail.refresh_running)
         self._run_timer.start()
-        QApplication.instance().aboutToQuit.connect(FlutterRunWindow.shutdown_all)
+        RunManager.get().changed.connect(self._on_runs_changed)
+        self._on_runs_changed()
+        QApplication.instance().aboutToQuit.connect(self._shutdown_runs)
 
     # -- layout --
 
@@ -124,17 +129,24 @@ class MainWindow(QMainWindow):
             on_edit_project=self._on_edit_project,
             on_delete_project=self._on_delete_project,
             on_add_project=self._on_add_project,
+            on_show_log=lambda folder: self.show_logs(folder),
         )
+        self._logs = LogPanel()
+        self._logs.hide()
+        self._logs.close_requested.connect(lambda: self._logs_btn.setChecked(False))
+        self._logs.open_window.connect(self._open_run_window)
         self._texts = TextPanel(self._service)
         self._texts.hide()
 
         self._splitter.addWidget(rail)
         self._splitter.addWidget(self._drawer)
+        self._splitter.addWidget(self._logs)
         self._splitter.addWidget(self._texts)
         self._splitter.setStretchFactor(0, 0)
         self._splitter.setStretchFactor(1, 1)
         self._splitter.setStretchFactor(2, 0)
-        self._splitter.setSizes([300, 900, 0])
+        self._splitter.setStretchFactor(3, 0)
+        self._splitter.setSizes([300, 900, 0, 0])
         root.addWidget(self._splitter, 1)
         self.setCentralWidget(cabinet)
 
@@ -180,6 +192,11 @@ class MainWindow(QMainWindow):
         row.addSpacing(10)
 
         row.addWidget(ScrcpyButton())
+        self._logs_btn = ToolSlot("Logs", "logs", compact=True, tooltip="Show the run logs (Ctrl+L)")
+        self._logs_btn.reserve("Logs · 9")
+        self._logs_btn.setCheckable(True)
+        self._logs_btn.toggled.connect(self._toggle_log_panel)
+        row.addWidget(self._logs_btn)
         self._texts_btn = ToolSlot("Snippets", "note", compact=True, tooltip="Show saved text snippets")
         self._texts_btn.setCheckable(True)
         self._texts_btn.toggled.connect(self._toggle_text_panel)
@@ -199,6 +216,7 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+E"), self, lambda: self._with_current(self._on_edit_project))
         QShortcut(QKeySequence("Ctrl+Return"), self, lambda: self._with_current(self._drawer.open_all))
         QShortcut(QKeySequence("F5"), self, self._reload_drawer)
+        QShortcut(QKeySequence("Ctrl+L"), self, lambda: self._logs_btn.setChecked(not self._logs_btn.isChecked()))
 
     def showEvent(self, event) -> None:
         apply_title_bar(self)
@@ -251,7 +269,8 @@ class MainWindow(QMainWindow):
     def _project_running(self, project: Project) -> bool:
         folders = [project.main_project_folder] if project.main_project_folder else []
         folders += [sp.directory for sp in project.sub_projects]
-        return any(FlutterRunWindow.session_state(f)[0] for f in folders)
+        manager = RunManager.get()
+        return any(manager.folder_state(f)[0] for f in folders)
 
     def _search_accepted(self) -> None:
         if self._rail.count():
@@ -332,10 +351,50 @@ class MainWindow(QMainWindow):
         self._texts.setVisible(show)
         if show:
             self._texts.refresh()
-            if self.width() < 1300 and not self.isMaximized():
-                self.resize(1300, self.height())
+            self._make_room(3, 320)
+
+    def _make_room(self, index: int, width: int) -> None:
+        """Give the side panel at splitter index width, taken from the drawer."""
+        sizes = self._splitter.sizes()
+        need = sum(sizes) - sizes[1] - sizes[index] + width + 400
+        if self.width() < need + 40 and not self.isMaximized():
+            self.resize(min(need + 40, self.screen().availableGeometry().width()), self.height())
             sizes = self._splitter.sizes()
-            self._splitter.setSizes([sizes[0], max(400, sizes[1] - 320), 320])
+        sizes[1] = max(400, sizes[1] - width + sizes[index])
+        sizes[index] = width
+        self._splitter.setSizes(sizes)
+
+    # -- run logs --
+
+    def show_logs(self, folder: Optional[str] = None) -> None:
+        """Open the log sidebar, on one of folder's runs if given."""
+        if folder:
+            self._logs.show_folder(folder)
+        self._logs_btn.setChecked(True)
+
+    def _toggle_log_panel(self, show: bool) -> None:
+        if show == self._logs.isVisible():
+            return
+        self._logs.setVisible(show)
+        if show:
+            self._make_room(2, 440)
+        self._on_runs_changed()
+
+    def _on_runs_changed(self) -> None:
+        manager = RunManager.get()
+        active = len(manager.active_runs())
+        self._logs_btn.setText(f"Logs · {active}" if active else "Logs")
+        self._logs_btn.setVisible(bool(manager.runs()) or self._logs.isVisible())
+        self._rail.refresh_running()
+
+    def _open_run_window(self, rid: str) -> None:
+        run = RunManager.get().run(rid)
+        if run:
+            FlutterRunWindow.open(None, run.folder, load_launch(run.folder), name=run.name, icon_path=run.icon_path)
+
+    def _shutdown_runs(self) -> None:
+        FlutterRunWindow.save_all()
+        RunManager.get().shutdown_all()
 
     def _update_theme_btn(self) -> None:
         dark = Theme.get().is_dark
@@ -405,6 +464,6 @@ class MainWindow(QMainWindow):
     # -- closing --
 
     def closeEvent(self, event) -> None:
-        FlutterRunWindow.shutdown_all()  # Don't leave `flutter run` processes behind
+        self._shutdown_runs()  # Don't leave `flutter run` processes behind
         event.accept()
         QApplication.instance().quit()

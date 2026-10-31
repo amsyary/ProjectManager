@@ -1,4 +1,4 @@
-"""Launch Cursor, VS Code, Antigravity, Notepad, browser, or system default app for paths."""
+"""Launch Cursor, VS Code, Antigravity, Claude, Notepad, browser, or system default app for paths."""
 
 import os
 import shutil
@@ -7,6 +7,7 @@ import sys
 import webbrowser
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 from models.project import ProjectType
 
@@ -14,6 +15,23 @@ from models.project import ProjectType
 def _quote_path(path: str) -> str:
     """Quote path for use in shell command on Windows."""
     return f'"{path}"'
+
+
+def claude_link(path: str) -> str:
+    """claude:// link that starts a Claude Code session in Claude Desktop; a file opens its folder."""
+    path = os.path.abspath(path)
+    folder = os.path.dirname(path) if os.path.isfile(path) else path
+    return f"claude://code/new?folder={quote(folder, safe='')}"
+
+
+def _open_with_system(target: str) -> None:
+    """Open a file or link with whatever the system has registered for it."""
+    if os.name == "nt":
+        os.startfile(target)
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", target])
+    else:
+        subprocess.Popen(["xdg-open", target])
 
 
 def _get_antigravity_command() -> str:
@@ -93,12 +111,12 @@ def _get_editor_exe(editor: str) -> str:
 
 
 class EditorLauncher:
-    """Opens project directories in Cursor, VS Code, or Antigravity."""
+    """Opens project directories in Cursor, VS Code, Antigravity, or Claude Desktop."""
 
     def __init__(self, editor: str = "cursor"):
         """
         Args:
-            editor: "cursor", "code" (VS Code), or "antigravity"
+            editor: "cursor", "code" (VS Code), "antigravity", or "claude" (Claude Desktop)
         """
         self.editor = editor.lower() if editor else "cursor"
 
@@ -131,12 +149,7 @@ class EditorLauncher:
             if not os.path.isfile(path):
                 return False
             try:
-                if os.name == "nt":
-                    os.startfile(path)
-                elif sys.platform == "darwin":
-                    subprocess.Popen(["open", path])
-                else:
-                    subprocess.Popen(["xdg-open", path])
+                _open_with_system(path)
                 return True
             except Exception:
                 return False
@@ -153,6 +166,13 @@ class EditorLauncher:
         # Flutter, Admin Dashboard, etc.: open file or folder in the chosen editor
         if not (os.path.isfile(path) or os.path.isdir(path)):
             return False
+
+        if self.editor == "claude":
+            try:
+                _open_with_system(claude_link(path))
+                return True
+            except Exception:
+                return False
 
         cmd = self._get_editor_command()
         quoted_path = _quote_path(path)

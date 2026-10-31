@@ -191,7 +191,7 @@ class ProjectService:
 
     @staticmethod
     def get_editor() -> str:
-        """Get saved editor preference (cursor, code, or antigravity)."""
+        """Get saved editor preference (cursor, code, antigravity, or claude)."""
         return _read_settings().get("editor", "cursor")
 
     @staticmethod
@@ -240,6 +240,26 @@ class ProjectService:
         """Save the Flutter run settings for a folder."""
         data = _read_settings()
         data.setdefault("flutter_runs", {})[ProjectService._folder_key(folder)] = settings
+        _write_settings(data)
+
+    @staticmethod
+    def get_device_names() -> dict[str, str]:
+        """Names the user gave devices, by device id (the adb serial for Android)."""
+        names = _read_settings().get("device_names", {})
+        return {str(k): str(v) for k, v in names.items()} if isinstance(names, dict) else {}
+
+    @staticmethod
+    def set_device_name(device_id: str, name: str) -> None:
+        """Name a device; an empty name goes back to the model name."""
+        data = _read_settings()
+        names = data.get("device_names")
+        if not isinstance(names, dict):
+            names = {}
+        if name.strip():
+            names[device_id] = name.strip()
+        else:
+            names.pop(device_id, None)
+        data["device_names"] = names
         _write_settings(data)
 
     @staticmethod

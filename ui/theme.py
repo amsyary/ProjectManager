@@ -78,6 +78,19 @@ LIGHT: dict[str, str] = {
     "noise_alpha": "13",
 }
 
+# Log colors: the 16 ANSI colors (VS Code's terminal palette on dark, darkened to read on the
+# light grey floor), then the colors given to lines that carry no ANSI codes of their own
+ANSI_DARK = [
+    "#6E7177", "#CD3131", "#0DBC79", "#E5E510", "#2472C8", "#BC3FBC", "#11A8CD", "#E5E5E5",
+    "#8A8D93", "#F14C4C", "#23D18B", "#F5F543", "#3B8EEA", "#D670D6", "#29B8DB", "#FFFFFF",
+]
+ANSI_LIGHT = [
+    "#1B1C1E", "#A3201A", "#0A600A", "#6E5200", "#0B4FA0", "#8E1A8E", "#08627A", "#3A3B3E",
+    "#55565A", "#B3261E", "#0E6E0E", "#7A5B00", "#0D56B0", "#9A1F9A", "#086C86", "#2A2B2E",
+]
+LOG_DARK = {"error": "#F14C4C", "warn": "#CCA700", "ok": "#89D185", "link": "#3794FF", "info": "#75BEFF"}
+LOG_LIGHT = {"error": "#A3201A", "warn": "#6E5200", "ok": "#0A600A", "link": "#0B4FA0", "info": "#0B4FA0"}
+
 # Two sizes carry every drawer: names and controls, then metadata and paths
 SIZE_MAIN = 14
 SIZE_META = 12
@@ -144,6 +157,14 @@ class Theme(QObject):
         if alpha is not None:
             c.setAlpha(alpha)
         return c
+
+    @property
+    def ansi(self) -> list[str]:
+        return ANSI_DARK if self._dark else ANSI_LIGHT
+
+    @property
+    def log(self) -> dict[str, str]:
+        return LOG_DARK if self._dark else LOG_LIGHT
 
     def set_dark(self, dark: bool) -> None:
         self._dark = dark

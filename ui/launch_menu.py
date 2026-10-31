@@ -12,6 +12,7 @@ from services.vscode_tasks import (
 )
 from ui import dialogs
 from ui.flutter_run_window import FlutterRunWindow
+from ui.run_manager import RunManager
 from ui.tasks_menu import ask_input
 from ui.widgets import Menu
 
@@ -21,8 +22,16 @@ def has_launch_options(folder: str, launch: Optional[LaunchFile]) -> bool:
 
 
 def quick_start(button: QWidget, folder: str, name: str = "", icon_path: Optional[str] = None) -> None:
-    """Open the Flutter window and start the app with the device and settings saved for this folder."""
-    FlutterRunWindow.open(button, folder, load_launch(folder), autorun=True, name=name, icon_path=icon_path)
+    """Run the app in the background on the devices and settings saved for this folder.
+
+    When it can't (nothing saved yet, device not connected, a flavor is needed, ...), the Flutter
+    window opens and says why.
+    """
+    launch = load_launch(folder)
+    RunManager.get().quick_start(
+        folder, launch, name, icon_path,
+        lambda message: FlutterRunWindow.open(None, folder, launch, name=name, icon_path=icon_path, note=message),
+    )
 
 
 def show_launch_menu(

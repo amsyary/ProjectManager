@@ -98,7 +98,7 @@ class ScrcpyLauncher:
         session = self._sessions.get(serial)
         return session is not None and session.process.poll() is None
 
-    def start(self, device: AdbDevice) -> None:
+    def start(self, device: AdbDevice, title: Optional[str] = None) -> None:
         """Start scrcpy for device in the background. Raises ScrcpyError if scrcpy is missing."""
         scrcpy = find_scrcpy()
         if not scrcpy:
@@ -115,7 +115,7 @@ class ScrcpyLauncher:
         try:
             with open(log_path, "w", encoding="utf-8") as log:
                 process = subprocess.Popen(
-                    [scrcpy, "-s", device.serial, "--window-title", device.display_name()],
+                    [scrcpy, "-s", device.serial, "--window-title", title or device.display_name()],
                     stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
                     env=env, creationflags=_NO_WINDOW,
                 )

@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 from services.scrcpy_launcher import ScrcpyLauncher, ScrcpyError, AdbDevice, SCRCPY_START_FAILED
 from ui import dialogs
+from ui.run_manager import RunManager
 from ui.widgets import Menu, ToolSlot
 
 POLL_MS = 1000
@@ -39,7 +40,7 @@ class ScrcpyButton(ToolSlot):
         menu = Menu(self)
         ready = [d for d in devices if d.is_ready]
         for d in devices:
-            label = d.display_name()
+            label = self._name(d)
             if label != d.serial:
                 label += f"   ({d.serial})"
             if not d.is_ready:
@@ -60,10 +61,15 @@ class ScrcpyButton(ToolSlot):
             menu.add(f"Run on all ({len(not_running)})", lambda: self._start(not_running), enabled=bool(not_running))
         menu.popup_below(self)
 
+    @staticmethod
+    def _name(device: AdbDevice) -> str:
+        """The name given to the device in the Flutter window, else its model."""
+        return RunManager.get().device_name(device.serial) or device.display_name()
+
     def _start(self, devices: list[AdbDevice]) -> None:
         for d in devices:
             try:
-                self._launcher.start(d)
+                self._launcher.start(d, self._name(d))
             except ScrcpyError as e:
                 dialogs.error(self.window(), "scrcpy", str(e))
                 break
@@ -82,7 +88,7 @@ class ScrcpyButton(ToolSlot):
             if session.process.returncode == SCRCPY_START_FAILED:
                 dialogs.error(
                     self.window(), "scrcpy",
-                    f"scrcpy failed on {session.device.display_name()}:\n\n{session.log_tail()}",
+                    f"scrcpy failed on {self._name(session.device)}:\n\n{session.log_tail()}",
                 )
         self._show_count()
         if not self._launcher.has_sessions():
