@@ -499,6 +499,10 @@ class Combo(QComboBox):
         popup.setWindowFlags(popup.windowFlags() | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint)
         popup.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
+    def wheelEvent(self, event) -> None:
+        # Scrolling past a combo must never change its value; let the page scroll instead
+        event.ignore()
+
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
         p = QPainter(self)

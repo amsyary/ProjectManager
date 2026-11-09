@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt
+from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QIcon, QKeySequence, QPainter, QShortcut
 from PySide6.QtWidgets import (
     QDialog, QFileDialog, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea,
@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 
 from models.project import Project, ProjectType, SubProject, SubProjectCommand
 from services.project_service import ProjectService
-from ui import dialogs
+from ui import dialogs, icons
 from ui.commands_dialog import CommandsDialog
 from ui.icon_loader import for_theme, load_icon, load_type_icon
 from ui.theme import RADIUS_SLOT, apply_title_bar, t
@@ -44,6 +44,67 @@ def _is_valid_url(s: str) -> bool:
         return False
 
 
+class _DragHandle(QWidget):
+    """The row's number with a grip under it: press and drag to move the row."""
+
+    def __init__(self, dialog: "ProjectDialog", row: "_FolderRow"):
+        super().__init__(row)
+        self._dialog = dialog
+        self._row = row
+        self._number = 1
+        self._dragging = False
+        self.setFixedWidth(20)
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        self.setToolTip("Drag to reorder (or Alt+Up / Alt+Down while editing the row)")
+
+    def set_number(self, n: int) -> None:
+        self._number = n
+        self.update()
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._dragging = True
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            self._dialog.begin_drag(self._row)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._dragging:
+            self._dialog.drag_to(event.globalPosition().toPoint())
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self._dragging and event.button() == Qt.MouseButton.LeftButton:
+            self._dragging = False
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+            self._dialog.end_drag()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def paintEvent(self, event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        hot = self._dragging or self.underMouse()
+        p.setPen(t("ink") if hot else t("ink_dim"))
+        p.setFont(self.font())
+        p.drawText(QRectF(0, 0, self.width(), 34), Qt.AlignmentFlag.AlignCenter, str(self._number))
+        grip = icons.pixmap("grip", t("ink_dim") if hot else t("ink_faint"), 16)
+        p.drawPixmap(QPointF((self.width() - 16) / 2, 34 + (self.height() - 34 - 16) / 2), grip)
+
+    def enterEvent(self, event) -> None:
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        self.update()
+        super().leaveEvent(event)
+
+
 class _FolderRow(FoamPanel):
     """One folder (sub-project) being edited."""
 
@@ -58,10 +119,8 @@ class _FolderRow(FoamPanel):
         grid.setHorizontalSpacing(8)
         grid.setVerticalSpacing(8)
 
-        self.number = QLabel("1")
-        self.number.setProperty("role", "dim")
-        self.number.setFixedWidth(18)
-        grid.addWidget(self.number, 0, 0)
+        self.handle = _DragHandle(dialog, self)
+        grid.addWidget(self.handle, 0, 0, 2, 1)
 
         self.type_box = Combo()
         for pt in TYPE_ORDER:
@@ -215,6 +274,10 @@ class ProjectDialog(QDialog):
         self.project = project
         self.result_project: Optional[Project] = None
         self._rows: list[_FolderRow] = []
+        self._drag_row: Optional[_FolderRow] = None
+        self._drag_pos = QPoint()
+        self._autoscroll = QTimer(self, interval=30)
+        self._autoscroll.timeout.connect(self._autoscroll_tick)
         self.setWindowTitle("Edit project" if project else "Add project")
         self.resize(940, 680)
         self.setMinimumSize(760, 520)
@@ -226,6 +289,8 @@ class ProjectDialog(QDialog):
         self._name.setFocus()
         QShortcut(QKeySequence("Ctrl+S"), self, self._on_save)
         QShortcut(QKeySequence("Ctrl+Return"), self, self._on_save)
+        QShortcut(QKeySequence("Alt+Up"), self, lambda: self._move_focused_row(-1))
+        QShortcut(QKeySequence("Alt+Down"), self, lambda: self._move_focused_row(1))
 
     def showEvent(self, event) -> None:
         apply_title_bar(self)
@@ -343,9 +408,72 @@ class ProjectDialog(QDialog):
 
     def _renumber(self) -> None:
         for i, row in enumerate(self._rows, start=1):
-            row.number.setText(str(i))
+            row.handle.set_number(i)
         n = len(self._rows)
         self._folders_label.setText(f"FOLDERS · {n}" if n else "FOLDERS")
+
+    # -- reordering --
+
+    def _move_row(self, row: _FolderRow, index: int) -> None:
+        """Put row at index in the list (and the layout), then renumber."""
+        index = max(0, min(index, len(self._rows) - 1))
+        if self._rows.index(row) == index:
+            return
+        self._rows.remove(row)
+        self._rows.insert(index, row)
+        self._list.removeWidget(row)
+        self._list.insertWidget(index, row)
+        self._list.activate()  # Lay out now so the next hit test sees the new positions
+        self._renumber()
+
+    def _move_focused_row(self, step: int) -> None:
+        focus = self.focusWidget()
+        row = next((r for r in self._rows if focus is not None and r.isAncestorOf(focus)), None)
+        if row is None:
+            return
+        self._move_row(row, self._rows.index(row) + step)
+        self._scroll.ensureWidgetVisible(row)
+        focus.setFocus()
+
+    def begin_drag(self, row: _FolderRow) -> None:
+        self._drag_row = row
+        row.set_raised(True)
+        self._autoscroll.start()
+
+    def drag_to(self, global_pos: QPoint) -> None:
+        self._drag_pos = global_pos
+        row = self._drag_row
+        if row is None:
+            return
+        y = self._scroll.widget().mapFromGlobal(global_pos).y()
+        others = [r for r in self._rows if r is not row]
+        target = sum(1 for r in others if r.geometry().center().y() < y)
+        self._move_row(row, target)
+
+    def end_drag(self) -> None:
+        self._autoscroll.stop()
+        if self._drag_row is not None:
+            self._drag_row.set_raised(False)
+            self._drag_row = None
+
+    def _autoscroll_tick(self) -> None:
+        """While dragging near the top or bottom edge, scroll the list and keep tracking."""
+        if self._drag_row is None:
+            return
+        viewport = self._scroll.viewport()
+        y = viewport.mapFromGlobal(self._drag_pos).y()
+        edge = 40
+        if y < edge:
+            step = -max(4, (edge - y) // 2)
+        elif y > viewport.height() - edge:
+            step = max(4, (y - viewport.height() + edge) // 2)
+        else:
+            return
+        bar = self._scroll.verticalScrollBar()
+        before = bar.value()
+        bar.setValue(before + step)
+        if bar.value() != before:
+            self.drag_to(self._drag_pos)
 
     def _update_preview(self) -> None:
         path = self._icon.text().strip() or None

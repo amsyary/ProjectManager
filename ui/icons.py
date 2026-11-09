@@ -46,7 +46,13 @@ _PATHS: dict[str, str] = {
     "erase":'<path d="M4.5 7h15M9.5 7V4.6h5V7M6.5 7l1 12.4c.1.8.7 1.4 1.5 1.4h6c.8 0 1.4-.6 1.5-1.4l1-12.4"/>',
 }
 
-_FILLED = {"play", "stop", "bolt", "more"}
+_PATHS["grip"] = (
+    '<circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/>'
+    '<circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/>'
+    '<circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/>'
+)
+
+_FILLED = {"play", "stop", "bolt", "more", "grip"}
 
 _cache: dict[tuple, QPixmap] = {}
 
